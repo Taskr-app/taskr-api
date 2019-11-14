@@ -18,6 +18,7 @@ import { redis } from "../services/redis";
 import { transporter } from "../services/emails/transporter";
 import { teamInviteEmail } from "../services/emails/teamInviteEmail";
 import { rateLimit } from "../services/rate-limit";
+import { Project } from "../entity/Project";
 
 const TeamBaseResolver = createBaseResolver("Team", Team);
 
@@ -35,6 +36,7 @@ export class TeamResolver extends TeamBaseResolver {
           userId: payload!.userId
         })
         .where("team.id = :teamId", { teamId: id })
+        .leftJoinAndSelect('team.projects', 'project')
         .getOne();
       if (!team)
         throw new Error(
@@ -170,6 +172,25 @@ export class TeamResolver extends TeamBaseResolver {
       if (!team) throw new Error(`This team doesn't exist`);
       team.name = name;
       return await team.save();
+    } catch (err) {
+      console.log(err);
+      return err;
+    }
+  }
+
+  @Mutation(() => Team)
+  @UseMiddleware(isAuth)
+  async deleteTeamProject(
+    @Arg("teamId", () => ID) teamId: number,
+    @Arg("projectId", () => ID) projectId: number
+  ) {
+    try {
+      const team = await Team.findOne({ where: { id: teamId } })
+      if (!team) throw new Error(`This team doesn't exist`)
+      const project = await Project.findOne({ where: { id: projectId } })
+      if (!project) throw new Error(`This project doesn't exist`)
+      project.team = null;
+      return await project.save();
     } catch (err) {
       console.log(err);
       return err;
