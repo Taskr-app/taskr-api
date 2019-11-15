@@ -19,7 +19,7 @@ const startServer = async () => {
     })
   );
 
-  app.get('/', (_req, res) => res.send('taskr api'));
+  app.get('/', (_req, res) => res.send('taskr-api'));
   app.post('/refresh_token', cookieParser(), refreshAccessToken);
   server.applyMiddleware({ app, cors: false });
   const ws = createServer(app);
