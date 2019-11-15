@@ -1,5 +1,15 @@
 import { createBaseResolver } from './BaseResolver';
-import { Resolver, Mutation, UseMiddleware, Arg, ID } from 'type-graphql';
+import {
+  Resolver,
+  Mutation,
+  UseMiddleware,
+  Arg,
+  ID,
+  PubSubEngine,
+  PubSub,
+  Subscription,
+  Root
+} from 'type-graphql';
 import { List } from '../entity/List';
 import { isAuth } from '../services/auth/isAuth';
 import { Project } from '../entity/Project';
@@ -7,13 +17,20 @@ import { Project } from '../entity/Project';
 const ListBaseResolver = createBaseResolver('List', List);
 const buffer = 16384;
 
+const topics = {
+  create: 'CREATE_LIST',
+  update: 'UPDATE_LIST',
+  delete: 'DELETE_LIST'
+};
+
 @Resolver()
 export class ListResolver extends ListBaseResolver {
   @Mutation(() => List)
   @UseMiddleware(isAuth)
   async createList(
-    @Arg('projectId', () => ID) projectId: number,
-    @Arg('name') name: string
+    @Arg('projectId', () => ID) projectId: string,
+    @Arg('name') name: string,
+    @PubSub() pubSub: PubSubEngine
   ) {
     try {
       const project = await Project.findOne({ where: { id: projectId } });
@@ -26,11 +43,72 @@ export class ListResolver extends ListBaseResolver {
         name,
         project
       }).save();
+      await pubSub.publish(topics.create, list);
       return list;
     } catch (err) {
       console.log(err);
       return err;
     }
+  }
+
+  @Mutation(() => List)
+  @UseMiddleware(isAuth)
+  async deleteList(
+    @Arg('id', () => ID) id: string,
+    @PubSub() pubSub: PubSubEngine
+  ) {
+    try {
+      const list = await List.findOne({
+        where: { id },
+        relations: ['project']
+      });
+      if (!list) {
+        throw new Error(`Could not find List`);
+      }
+      await pubSub.publish(topics.delete, list);
+      list.remove();
+      return list;
+    } catch (err) {
+      console.log(err);
+      return err;
+    }
+  }
+
+  @Subscription({
+    topics: topics.create,
+    filter: ({ payload, args }) =>
+      payload.project.id === parseInt(args.projectId)
+  })
+  onListCreated(
+    @Root() list: List,
+    @Arg('projectId', () => ID) _: string
+  ): List {
+    return list;
+  }
+
+  @Subscription({
+    topics: topics.delete,
+    filter: ({ payload, args }) => {
+      return payload.project.id === parseInt(args.projectId);
+    }
+  })
+  onListDeleted(
+    @Root() list: List,
+    @Arg('projectId', () => ID) _: string
+  ): List {
+    return list;
+  }
+
+  @Subscription({
+    topics: topics.update,
+    filter: ({ payload, args }) =>
+      payload.project.id === parseInt(args.projectId)
+  })
+  onListUpdated(
+    @Root() list: List,
+    @Arg('projectId', () => ID) _: string
+  ): List {
+    return list;
   }
 
   // update name
