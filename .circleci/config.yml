@@ -1,4 +1,4 @@
-version: 2
+version: 2.1
 jobs:
   build:
     working_directory: ~/taskr-server
@@ -63,7 +63,7 @@ jobs:
           command: yarn test
 
 workflows:
-  version: 2
+  version: 2.1
   predeploy:
     jobs:
       - build
