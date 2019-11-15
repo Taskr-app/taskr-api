@@ -1,0 +1,72 @@
+version: 2
+jobs:
+  build:
+  working_directory: ~/taskr-server
+  docker:
+    - image: circleci/node:latest
+
+  steps:
+    - checkout:
+        path: ~/taskr-server
+    - restore_cache:
+        keys:
+          - dependency-cache-{{ checksum "yarn.lock" }}
+          - dependency-cache-
+    - run:
+        name: "Install dependencies"
+        command: yarn
+
+    - save_cache:
+        paths:
+          - node_modules
+        key: dependency-cache-{{ checksum "yarn.lock" }}
+    - persist_to_workspace:
+        root: '.'
+        paths:
+          - node_modules
+          - yarn.lock
+
+  test:
+    working_directory: ~/taskr-server
+    docker:
+      - image: circleci/node:latest
+        environment:
+          NODE_ENV: test
+          ACCESS_TOKEN_SECRET: circle
+          REFRESH_TOKEN_SECRET: ci
+          DATABASE_URL: postgres
+          PG_USER: postgres
+          PG_PASSWORD: postgres
+          CLIENT_URL: http://localhost:3000
+          PG_HOST: localhost
+          PG_PORT: 5432
+      - image: postgres:11.5-alpine
+        environment:
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_USER: postgres
+          POSTGRES_DB: postgres
+      - image: redis:latest
+    steps:
+      - checkout:
+          path: ~/taskr-server
+      - attach_workspace:
+          at: '.'
+      - restore_cache:
+          keys:
+            - dependency-cache-{{ checksum "yarn.lock" }}
+            - dependency-cache-
+      - run:
+          name: Load fixtures
+          command: yarn db:seed
+      - run:
+          name: "Api test"
+          command: yarn test
+
+workflows:
+  version: 2
+  predeploy:
+    jobs:
+      - build
+      - test:
+          requires:
+            - build
