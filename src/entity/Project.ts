@@ -61,5 +61,5 @@ export class Project extends BaseEntity {
   @ManyToOne(() => Team, team => team.projects, {
     onDelete: "SET NULL"
   })
-  team: Team;
+  team: Team | null;
 }
