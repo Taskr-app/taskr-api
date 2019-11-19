@@ -4,4 +4,5 @@ export interface MyContext {
   req: Request;
   res: Response;
   payload?: { userId: number };
+  entity?: any
 }
