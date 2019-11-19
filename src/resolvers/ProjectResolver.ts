@@ -56,12 +56,15 @@ export class ProjectResolver extends ProjectBaseResolver {
   @UseMiddleware(isAuth)
   async getUserProjects(@Ctx() { payload }: MyContext) {
     try {
-      const user = await User.findOne({
-        relations: ['projects'],
-        where: { id: payload!.userId }
-      });
-      if (!user) throw new Error(`This user doesn't exist`);
-      return user.projects;
+      const projects = await Project.createQueryBuilder('project')
+        .innerJoin('project.members', 'user', 'user.id = :userId', {
+          userId: payload!.userId
+        })
+        .innerJoinAndSelect("project.members", 'member')
+        .innerJoinAndSelect("project.owner", "owner")
+        .getMany();
+
+      return projects
     } catch (err) {
       console.log(err);
       return err;
