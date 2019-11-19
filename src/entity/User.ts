@@ -60,6 +60,12 @@ export class User extends BaseEntity {
   })
   ownedProjects: Project[];
 
+  @Field(() => [Team])
+  @OneToMany(() => Team, team => team.owner, {
+    cascade: true,
+  })
+  ownedTeams: Team[]
+
   @Field(() => [Project])
   @ManyToMany(() => Project, project => project.members)
   @JoinTable()
