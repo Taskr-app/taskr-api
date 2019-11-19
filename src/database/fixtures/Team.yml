@@ -2,9 +2,25 @@ entity: Team
 items:
   team1:
     name: '{{company.companyName}}'
+    owner: '@user1'
     members:
       - '@user1'
       - '@user2'
+      - '@user3'
+      - '@user4'
+  team2:
+    name: '{{company.companyName}}'
+    owner: '@user2'
+    members:
+      - '@user1'
+      - '@user2'
+      - '@user5'
+      - '@user7'
+  team3:
+    name: '{{company.companyName}}'
+    owner: '@user1'
+    members:
+      - '@user1'
       - '@user3'
       - '@user4'
  
