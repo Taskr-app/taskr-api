@@ -32,7 +32,10 @@ export class ProjectResolver {
           userId: payload!.userId
         })
         .where('project.id = :projectId', { projectId: id })
-        .leftJoinAndSelect('project.lists', 'list')
+        .innerJoinAndSelect('project.lists', 'list')
+        .orderBy({
+          'list.pos': 'ASC'
+        })
         .getOne();
 
       if (!project) {
