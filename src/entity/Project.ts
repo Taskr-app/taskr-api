@@ -13,6 +13,7 @@ import { ObjectType, Field, Int } from 'type-graphql';
 import { User } from './User';
 import { List } from './List';
 import { Team } from './Team';
+import { Label } from './Label';
 
 @ObjectType()
 @Entity('projects')
@@ -62,4 +63,7 @@ export class Project extends BaseEntity {
     onDelete: "SET NULL"
   })
   team: Team | null;
+
+  @OneToMany(() => Label, label => label.project)
+  labels: Label[]
 }

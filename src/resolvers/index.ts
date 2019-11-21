@@ -4,6 +4,7 @@ import { ListResolver } from './ListResolver';
 import { LinkResolver } from './LinkResolver';
 import { TeamResolver } from './TeamResolver';
 import { TaskResolver } from './TaskResolver'
+import { LabelResolver } from './LabelResolver';
 
 export default [
   UserResolver,
@@ -11,5 +12,6 @@ export default [
   ListResolver,
   LinkResolver,
   TeamResolver,
-  TaskResolver
+  TaskResolver,
+  LabelResolver
 ];
