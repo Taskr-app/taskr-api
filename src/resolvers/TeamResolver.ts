@@ -10,7 +10,7 @@ import {
   Query,
   ID
 } from "type-graphql";
-import { isAuth } from "../services/auth/isAuth";
+import { isAuth, isOwner } from "../services/auth/isAuth";
 import { v4 } from "uuid";
 import { MyContext } from "../services/context";
 import { User } from "../entity/User";
@@ -32,11 +32,12 @@ export class TeamResolver extends TeamBaseResolver {
   ) {
     try {
       const team = await Team.createQueryBuilder("team")
-        .innerJoinAndSelect("team.members", "user", "user.id = :userId", {
+        .innerJoin('team.members', "user", "user.id = :userId", {
           userId: payload!.userId
         })
         .where("team.id = :teamId", { teamId: id })
-        .leftJoinAndSelect('team.projects', 'project')
+        .innerJoinAndSelect("team.members", "member")
+        .leftJoinAndSelect('team.projects', 'projects')
         .getOne();
       if (!team)
         throw new Error(
@@ -71,7 +72,8 @@ export class TeamResolver extends TeamBaseResolver {
     try {
       const user = await User.findOne({ where: { id: payload!.userId } });
       const team = await Team.create({
-        name
+        name,
+        owner: user
       });
       team.members = [user!];
       return await team.save();
@@ -141,16 +143,18 @@ export class TeamResolver extends TeamBaseResolver {
   }
 
   @Mutation(() => Boolean)
-  @UseMiddleware(isAuth)
+  @UseMiddleware(isAuth, isOwner(Team, 'teamId'))
   async deleteTeamMember(
-    @Arg("teamId", () => ID) teamId: number,
-    @Arg("userId", () => ID) userId: number
+    @Arg("teamId", () => ID) _teamId: number,
+    @Arg("userId", () => ID) userId: number,
+    @Ctx() { entity: team }: { entity: Team }
   ) {
     try {
-      const team = await Team.findOne({ where: { id: teamId } });
-      if (!team) throw new Error(`This team doesn't exist`);
       const user = await User.findOne({ where: { id: userId } });
       if (!user) throw new Error(`This user doesn't exist`);
+      if (user.id === team.owner.id) {
+        throw new Error(`The owner of the team cannot be removed`)
+      }
       team.members = team.members.filter(member => member.id !== user.id);
       await team.save();
 
@@ -162,14 +166,13 @@ export class TeamResolver extends TeamBaseResolver {
   }
 
   @Mutation(() => Team)
-  @UseMiddleware(isAuth)
+  @UseMiddleware(isAuth, isOwner(Team, 'teamId'))
   async updateTeam(
-    @Arg("teamId", () => ID) teamId: number,
-    @Arg("name") name: string
+    @Arg("teamId", () => ID) _teamId: number,
+    @Arg("name") name: string,
+    @Ctx() { entity: team }: { entity: Team }
   ) {
     try {
-      const team = await Team.findOne({ where: { id: teamId } });
-      if (!team) throw new Error(`This team doesn't exist`);
       team.name = name;
       return await team.save();
     } catch (err) {
@@ -179,14 +182,12 @@ export class TeamResolver extends TeamBaseResolver {
   }
 
   @Mutation(() => Team)
-  @UseMiddleware(isAuth)
+  @UseMiddleware(isAuth, isOwner(Team, 'teamId'))
   async deleteTeamProject(
-    @Arg("teamId", () => ID) teamId: number,
-    @Arg("projectId", () => ID) projectId: number
+    @Arg("teamId", () => ID) _teamId: number,
+    @Arg("projectId", () => ID) projectId: number,
   ) {
     try {
-      const team = await Team.findOne({ where: { id: teamId } })
-      if (!team) throw new Error(`This team doesn't exist`)
       const project = await Project.findOne({ where: { id: projectId } })
       if (!project) throw new Error(`This project doesn't exist`)
       project.team = null;

@@ -1,10 +1,20 @@
-import { Entity, PrimaryGeneratedColumn, Column, BaseEntity, CreateDateColumn, UpdateDateColumn, ManyToMany, OneToMany } from 'typeorm';
-import { ObjectType, Field, ID } from 'type-graphql';
-import { User } from './User';
-import { Project } from './Project';
+import {
+  Entity,
+  PrimaryGeneratedColumn,
+  Column,
+  BaseEntity,
+  CreateDateColumn,
+  UpdateDateColumn,
+  ManyToMany,
+  OneToMany,
+  ManyToOne
+} from "typeorm";
+import { ObjectType, Field, ID } from "type-graphql";
+import { User } from "./User";
+import { Project } from "./Project";
 
 @ObjectType()
-@Entity('teams')
+@Entity("teams")
 export class Team extends BaseEntity {
   @Field(() => ID)
   @PrimaryGeneratedColumn()
@@ -23,14 +33,32 @@ export class Team extends BaseEntity {
   updated_at: Date;
 
   @Field(() => [User])
-  @ManyToMany(() => User, user => user.teams, {
-    eager: true
-  })
-  members: User[]
+  @ManyToMany(
+    () => User,
+    user => user.teams,
+    {
+      eager: true
+    }
+  )
+  members: User[];
+
+  @Field(() => User)
+  @ManyToOne(
+    () => User,
+    user => user.ownedTeams,
+    {
+      onDelete: "CASCADE"
+    }
+  )
+  owner: User;
 
   @Field(() => [Project])
-  @OneToMany(() => Project, project => project.team, {
-    eager: true
-  })
-  projects: Project[]
+  @OneToMany(
+    () => Project,
+    project => project.team,
+    {
+      eager: true
+    }
+  )
+  projects: Project[];
 }

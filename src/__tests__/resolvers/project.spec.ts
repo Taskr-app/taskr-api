@@ -99,10 +99,7 @@ describe('Project Resolver', () => {
       const res = await mutate({
         mutation: gql`
           mutation DeleteProject($id: ID!) {
-            deleteProject(id: $id) {
-              id
-              name
-            }
+            deleteProject(id: $id)
           }
         `,
         variables: {

@@ -7,12 +7,11 @@ import {
   ID,
   Query
 } from 'type-graphql';
-import { isAuth } from '../services/auth/isAuth';
+import { isAuth, isOwner } from '../services/auth/isAuth';
 import { Project } from '../entity/Project';
 import { MyContext } from '../services/context';
 import { User } from '../entity/User';
 import { rateLimit } from '../services/rate-limit';
-import { createBaseResolver } from './BaseResolver';
 import { v4 } from 'uuid';
 import { redis } from '../services/redis';
 import { projectInviteEmail } from '../services/emails/projectInviteEmail';
@@ -20,10 +19,8 @@ import { transporter } from '../services/emails/transporter';
 import { Team } from '../entity/Team';
 import { generateProjectLink } from '../services/links';
 
-const ProjectBaseResolver = createBaseResolver('Project', Project);
-
 @Resolver()
-export class ProjectResolver extends ProjectBaseResolver {
+export class ProjectResolver {
   @Query(() => Project)
   @UseMiddleware(isAuth)
   async getUserProject(
@@ -59,12 +56,15 @@ export class ProjectResolver extends ProjectBaseResolver {
   @UseMiddleware(isAuth)
   async getUserProjects(@Ctx() { payload }: MyContext) {
     try {
-      const user = await User.findOne({
-        relations: ['projects'],
-        where: { id: payload!.userId }
-      });
-      if (!user) throw new Error(`This user doesn't exist`);
-      return user.projects;
+      const projects = await Project.createQueryBuilder('project')
+        .innerJoin('project.members', 'user', 'user.id = :userId', {
+          userId: payload!.userId
+        })
+        .innerJoinAndSelect('project.members', 'member')
+        .innerJoinAndSelect('project.owner', 'owner')
+        .getMany();
+
+      return projects;
     } catch (err) {
       console.log(err);
       return err;
@@ -100,18 +100,15 @@ export class ProjectResolver extends ProjectBaseResolver {
   }
 
   @Mutation(() => Boolean)
-  @UseMiddleware(isAuth)
+  @UseMiddleware(isAuth, isOwner(Project, 'id'))
   async updateProject(
-    @Arg('id', () => ID) id: number,
+    @Ctx() { entity: project }: { entity: Project },
+    @Arg('id', () => ID) _id: number,
     @Arg('name', { nullable: true }) name?: string,
     @Arg('desc', { nullable: true }) desc?: string,
     @Arg('teamId', () => ID, { nullable: true }) teamId?: number
   ) {
     try {
-      const project = await Project.findOne({ where: { id } });
-      if (!project) {
-        throw new Error('Project does not exist');
-      }
       if (name && project.name !== name) {
         project.name = name;
       }
@@ -127,6 +124,21 @@ export class ProjectResolver extends ProjectBaseResolver {
       }
 
       await project.save();
+      return true;
+    } catch (err) {
+      console.log(err);
+      return err;
+    }
+  }
+
+  @Mutation(() => Boolean)
+  @UseMiddleware(isAuth, isOwner(Project, 'id'))
+  async deleteProject(
+    @Arg('id', () => ID) _id: number,
+    @Ctx() { entity: project }: { entity: Project }
+  ) {
+    try {
+      await project.remove();
       return true;
     } catch (err) {
       console.log(err);

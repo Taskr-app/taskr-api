@@ -2,8 +2,8 @@ entity: Project
 # processor: ../processor/ProjectProcessor
 items:
   project1:
-    name: 'Mello'
-    desc: 'this is mello'
+    name: '{{commerce.productName}}'
+    desc: '{{lorem.sentence}}'
     owner: '@user1'
     members:
       - '@user1'
@@ -11,22 +11,46 @@ items:
       - '@user3'
     team: '@team*'
   project2:
-    name: 'Dorya'
-    desc: 'dorya!'
+    name: '{{commerce.productName}}'
+    desc: '{{lorem.sentence}}'
+    owner: '@user1'
+    members:
+      - '@user1'
+      - '@user2'
+      - '@user3'
+    team: '@team1'
+  project3:
+    name: '{{commerce.productName}}'
+    desc: '{{lorem.sentence}}'
+    owner: '@user1'
+    members:
+      - '@user1'
+      - '@user2'
+      - '@user4'
+    team: '@team1'
+  project4:
+    name: '{{commerce.productName{{'
+    desc: '{{lorem.sentence}}'
+    owner: '@user1'
+    members:
+      - '@user1'
+      - '@user3'
+      - '@user4'
+      - '@user6'
+      - '@user5'
+    team: '@team2'
+  project{5..6}:
+    name: '{{commerce.productName}}'
+    desc: '{{lorem.sentence}}'
+    owner: '@user1'
+    members:
+      - '@user1'
+      - '@user2'
+      - '@user3'
+  project{7..10}:
+    name: '{{commerce.productName}}'
+    desc: '{{lorem.sentence}}'
     owner: '@user2'
     members:
       - '@user2'
-      - '@user1'
       - '@user3'
-  project3:
-    name: 'Products'
-    desc: 'some products'
-    owner: '@user3'
-    members:
-      - '@user2'
-      - '@user4'
-  # project{4..10}:
-  #   name: '{{commerce.productName}}'
-  #   desc: '{{lorem.sentence}}'
-  #   owner: '@user*'
-  # members:
