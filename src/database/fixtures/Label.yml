@@ -1,0 +1,7 @@
+entity: Label
+processor: ../processor/LabelProcessor
+items:
+  label:
+    name: '{{company.bsAdjective}}'
+    project: '@project*'
+ 

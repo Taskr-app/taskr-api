@@ -1,6 +1,7 @@
 entity: Task
+processor: ../processor/TaskProcessor
 items:
-  task{1..50}:
+  task{1..35}:
     name: '{{hacker.verb}}'
     desc: '{{hacker.noun}}'
     list: '@list*'
