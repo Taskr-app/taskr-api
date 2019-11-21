@@ -48,12 +48,16 @@ export class TaskResolver {
     @Arg("desc", { nullable: true }) desc?: string
   ) {
     try {
-      const list = await List.findOne({ where: { id: listId } });
+      const list = await List.findOne({
+        relations: ['project'],
+        where: { id: listId }
+      });
       if (!list) throw new Error(`This list doesn't exist`);
       const task = await Task.create({
         name,
         desc,
-        list
+        list,
+        project: list.project
       }).save();
       await publish(task);
       return task;
