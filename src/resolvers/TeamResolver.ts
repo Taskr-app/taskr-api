@@ -32,11 +32,12 @@ export class TeamResolver extends TeamBaseResolver {
   ) {
     try {
       const team = await Team.createQueryBuilder("team")
-        .innerJoinAndSelect("team.members", "user", "user.id = :userId", {
+        .innerJoin('team.members', "user", "user.id = :userId", {
           userId: payload!.userId
         })
         .where("team.id = :teamId", { teamId: id })
-        .leftJoinAndSelect('team.projects', 'project')
+        .innerJoinAndSelect("team.members", "member")
+        .leftJoinAndSelect('team.projects', 'projects')
         .getOne();
       if (!team)
         throw new Error(
