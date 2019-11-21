@@ -7,7 +7,8 @@ import resolvers from '../resolvers';
 export const server = new ApolloServer({
   schema: buildSchemaSync({
     resolvers,
-    pubSub
+    pubSub,
+    validate: false
   }),
   context: ({ req, res }) => ({ req, res })
 });

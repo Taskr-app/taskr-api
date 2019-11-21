@@ -10,7 +10,8 @@ import resolvers from '../../resolvers';
 
 export const testServer = new ApolloServer({
   schema: buildSchemaSync({
-    resolvers
+    resolvers,
+    validate: false
   }),
   context: () => {
     return {
