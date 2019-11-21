@@ -28,7 +28,18 @@ items:
       - '@user2'
       - '@user4'
     team: '@team1'
-  project{4..6}:
+  project4:
+    name: '{{commerce.productName{{'
+    desc: '{{lorem.sentence}}'
+    owner: '@user1'
+    members:
+      - '@user1'
+      - '@user3'
+      - '@user4'
+      - '@user6'
+      - '@user5'
+    team: '@team2'
+  project{5..6}:
     name: '{{commerce.productName}}'
     desc: '{{lorem.sentence}}'
     owner: '@user1'
