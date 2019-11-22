@@ -53,14 +53,42 @@ export class LinkResolver {
     }
   }
 
-  @Mutation(() => [Notifications])
+  @Query(() => [Notifications])
   async getNotifications(
     @Arg('userId', () => ID) userId: number
   ) {
     try {
-      const notifications = await Notifications.getAll({ userId })
+      const notifications = await Notifications.find({ userId })
       if (!notifications) throw new Error(`Notifications doesn't exist`)
       return notifications
+    } catch (err) {
+      console.log(err);
+      return err;
+    }
+  }
+
+  @Query(() => Notifications)
+  async getNotification(
+    @Arg('id', () => ID) id: string
+  ) {
+    try {
+      const notification = await Notifications.findOne({ id })
+      console.log('notification: ', notification)
+      return notification
+    } catch (err) {
+      console.log(err);
+      return err;
+    }
+  }
+
+  @Mutation(() => Boolean)
+  async deleteNotification(
+    @Arg('id', () => ID) id: string
+  ) {
+    try {
+      const notification = await Notifications.findOne({ id })
+      await notification.remove()
+      return true
     } catch (err) {
       console.log(err);
       return err;

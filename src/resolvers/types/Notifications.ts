@@ -9,15 +9,29 @@ import { v4 } from "uuid";
  * @date (Date) date notification was created
  * @userId (number) id of the user that created the action
  * @type (string) action type ie. createTeam, createProject, deleteProject
- *
+ * @find (({ userId: number }, range: [number, number]) => Promise<Notificatoins>[]) get notifications from 0 - range from a specific user
  * @create (({ userId: number, type: string }) => true) creates a notification in redis
  * @remove ((notificationId: number, userId: number) => true) removes a notification in redis
- * @getAll ((userId: number, range: number)) get notifications from 0 - range from a specific user
- * @get (function) get a single notification by id
  */
+
+interface NotificationsArg {
+  id: string;
+  date: Date;
+  userId: number;
+  type: string;
+  read: boolean;
+}
 
 @ObjectType()
 export class Notifications {
+  constructor({ id, date, userId, type, read }: NotificationsArg) {
+    this.id = id;
+    this.date = date;
+    this.userId = userId;
+    this.type = type;
+    this.read = read;
+  }
+
   @Field(() => ID)
   id: string;
 
@@ -64,15 +78,15 @@ export class Notifications {
     }
   }
 
-  static async getAll<T extends Pick<Notifications, "userId">>(
+  static async find<T extends Pick<Notifications, "userId">>(
     { userId }: T,
-    range: number = 10
+    range: [number, number] = [0, 10]
   ): Promise<Notifications[]> {
     try {
       const notificationIds = await redis.lrange(
         `user-notifications-${userId}`,
-        0,
-        range
+        range[0],
+        range[1]
       );
       const notifications: Notifications[] = await notificationIds.reduce(
         async (notifications: Notifications[], notificationId: number) => {
@@ -80,15 +94,18 @@ export class Notifications {
             `notifications-${notificationId}`
           );
           if (!Object.keys(notification).length) {
-            await redis.lrem(`user-notifications-${userId}`, 1, notificationId)
-            return notifications;
+            await redis.lrem(`user-notifications-${userId}`, 1, notificationId);
+            return await notifications;
           } else {
+            redis.expire(`notifications-${notificationId}`, 604800);
+            const notificationClass = new Notifications({
+              ...notification,
+              read: notification.read === "true" ? true : false
+            })
+
             return [
-              ...notifications,
-              {
-                ...notification,
-                read: notification.read === "true" ? true : false
-              }
+              ...(await notifications),
+              notificationClass
             ];
           }
         },
@@ -102,18 +119,31 @@ export class Notifications {
     }
   }
 
-  static async remove(notificationId: number, userId: number) {
+  static async findOne<T extends Pick<Notifications, "id">>({
+    id
+  }: T): Promise<Notifications> {
     try {
-      const notification = await redis.del(`notifications-${notificationId}`);
-      if (!notification) throw new Error(`This notification doesn't exist`);
-      const userNotifications = await redis.lrem(
-        `user-notifications-${userId}`,
-        1,
-        notificationId
-      );
-      if (!userNotifications)
-        throw new Error(`User notifications doesn't exist`);
-      return true;
+      const notification = await redis.hgetall(`notifications-${id}`);
+      if (!notification || !Object.keys(notification).length) {
+        throw new Error(`This notification doesn't exist`);
+      }
+      return new Notifications({
+        ...notification,
+        read: notification.read === "true" ? true : false
+      });
+    } catch (err) {
+      console.log(err);
+      return err;
+    }
+  }
+
+  async remove() {
+    try {
+      const removedNotification = await redis.del(`notifications-${this.id}`)
+      if (!removedNotification) throw new Error(`Could not delete notification`)
+      const removedUserNotification = await redis.lrem(`user-notifications-${this.userId}`, 1, this.id)
+      if (!removedUserNotification) throw new Error(`Could not delete user notification`)
+      return true
     } catch (err) {
       console.log(err);
       return err;
