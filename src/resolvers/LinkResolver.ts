@@ -1,6 +1,7 @@
-import { Resolver, Query, Arg, ID } from "type-graphql";
+import { Resolver, Query, Arg, ID, Mutation } from "type-graphql";
 import { redis } from "../services/redis";
 import { generateProjectLink } from "../services/links";
+import { Notifications } from "./types/Notifications";
 
 @Resolver()
 export class LinkResolver {
@@ -29,6 +30,37 @@ export class LinkResolver {
         throw new Error(`This link has expired`);
       }
       return true;
+    } catch (err) {
+      console.log(err);
+      return err;
+    }
+  }
+
+  @Mutation(() => Boolean)
+  async createNotification(
+    @Arg('userId', () => ID) userId: number
+  ) {
+    try {
+      await Notifications.create({
+        userId,
+        type: 'test'
+      })
+  
+      return true
+    } catch (err) {
+      console.log(err)
+      return err;
+    }
+  }
+
+  @Mutation(() => [Notifications])
+  async getNotifications(
+    @Arg('userId', () => ID) userId: number
+  ) {
+    try {
+      const notifications = await Notifications.getAll({ userId })
+      if (!notifications) throw new Error(`Notifications doesn't exist`)
+      return notifications
     } catch (err) {
       console.log(err);
       return err;
