@@ -12,8 +12,8 @@ import {
   Query
 } from "type-graphql";
 import { Task } from "../entity/Task";
-import { isAuth } from "../services/auth/isAuth";
 import { List } from "../entity/List";
+import { isAuth } from "./middleware";
 
 const topics = {
   create: "CREATE_TASK",

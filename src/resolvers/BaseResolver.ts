@@ -7,7 +7,7 @@ import {
   ID
 } from "type-graphql";
 import { BaseEntity } from "typeorm";
-import { isAuth } from "../services/auth/isAuth";
+import { isAuth } from "./middleware";
 
 export function createBaseResolver<T extends typeof BaseEntity>(
   suffix: string,

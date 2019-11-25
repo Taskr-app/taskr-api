@@ -11,8 +11,8 @@ import {
   Root
 } from 'type-graphql';
 import { List } from '../entity/List';
-import { isAuth } from '../services/auth/isAuth';
 import { Project } from '../entity/Project';
+import { isAuth } from './middleware/isAuth';
 
 const ListBaseResolver = createBaseResolver('List', List);
 const buffer = 16384;
