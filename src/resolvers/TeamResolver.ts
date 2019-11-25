@@ -18,7 +18,6 @@ import { transporter } from "../services/emails/transporter";
 import { teamInviteEmail } from "../services/emails/teamInviteEmail";
 import { Project } from "../entity/Project";
 import { isAuth, rateLimit, isOwner } from "./middleware";
-import { createNotification } from "./middleware/createNotification";
 
 const TeamBaseResolver = createBaseResolver("Team", Team);
 
