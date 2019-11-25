@@ -5,6 +5,7 @@ import { LinkResolver } from './LinkResolver';
 import { TeamResolver } from './TeamResolver';
 import { TaskResolver } from './TaskResolver'
 import { LabelResolver } from './LabelResolver';
+import { NotificationsResolver } from './NotificationsResolver';
 
 export default [
   UserResolver,
@@ -13,5 +14,6 @@ export default [
   LinkResolver,
   TeamResolver,
   TaskResolver,
-  LabelResolver
+  LabelResolver,
+  NotificationsResolver
 ];

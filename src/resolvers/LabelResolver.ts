@@ -10,10 +10,10 @@ import {
   Field
 } from "type-graphql";
 import { Label } from "../entity/Label";
-import { isAuth } from "../services/auth/isAuth";
 import { Project } from "../entity/Project";
 import { HexColor } from "./types/HexColor";
 import { Task } from "../entity/Task";
+import { isAuth } from "./middleware";
 
 @ArgsType()
 class LabelArgs {

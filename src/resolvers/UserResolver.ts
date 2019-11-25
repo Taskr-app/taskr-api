@@ -18,15 +18,15 @@ import { getConnection } from 'typeorm';
 import { transporter } from '../services/emails/transporter';
 import { verificationEmail } from '../services/emails/verificationEmail';
 import { forgotPasswordEmail } from '../services/emails/forgotPassword';
-import { rateLimit } from '../services/rate-limit';
 import { sendRefreshToken } from '../services/auth/sendRefreshToken';
-import { isAuth } from '../services/auth/isAuth';
 import { createOAuth2Client, verifyIdToken } from '../services/auth/google';
 import { cloudinary } from '../services/cloudinary';
 import { redis } from '../services/redis';
 import { ImageResponse } from './types/ImageResponse';
 import { v4 } from 'uuid';
 import { LoginResponse } from './types/LoginResponse';
+import { rateLimit, isAuth } from './middleware';
+import { createNotification } from './middleware/createNotification';
 
 @Resolver()
 export class UserResolver {
@@ -105,7 +105,7 @@ export class UserResolver {
   }
 
   @Mutation(() => LoginResponse)
-  @UseMiddleware(rateLimit(10))
+  @UseMiddleware(rateLimit(10), createNotification)
   async register(
     @Arg('email') email: string,
     @Arg('verificationLink') verificationLink: string,

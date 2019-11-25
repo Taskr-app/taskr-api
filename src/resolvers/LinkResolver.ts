@@ -1,7 +1,6 @@
-import { Resolver, Query, Arg, ID, Mutation } from "type-graphql";
+import { Resolver, Query, Arg, ID } from "type-graphql";
 import { redis } from "../services/redis";
 import { generateProjectLink } from "../services/links";
-import { Notifications } from "./types/Notifications";
 
 @Resolver()
 export class LinkResolver {

@@ -1,6 +1,6 @@
 import { MiddlewareFn } from "type-graphql";
-import { MyContext } from "./context";
-import { redis } from "./redis";
+import { MyContext } from "../../services/context";
+import { redis } from "../../services/redis";
 
 const expireDuration = process.env.NODE_ENV === 'development' ? 1 : 60 * 60
 /**

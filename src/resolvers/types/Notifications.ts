@@ -4,17 +4,9 @@ import { v4 } from "uuid";
 
 /**
  * red-skeys: `notifications-<id>` & `user-notifications-<userId>`
- *
- * @id (number) auto incremented key for redis
- * @date (Date) date notification was created
- * @userId (number) id of the user that created the action
- * @type (string) action type ie. createTeam, createProject, deleteProject
- * @find (({ userId: number }, range: [number, number]) => Promise<Notificatoins>[]) get notifications from 0 - range from a specific user
- * @create (({ userId: number, type: string }) => true) creates a notification in redis
- * @remove ((notificationId: number, userId: number) => true) removes a notification in redis
  */
 
-interface NotificationsArg {
+export interface NotificationsArg {
   id: string;
   date: Date;
   userId: number;
@@ -50,7 +42,7 @@ export class Notifications {
   static async create<T extends Pick<Notifications, "userId" | "type">>({
     userId,
     type
-  }: T): Promise<Boolean> {
+  }: T): Promise<Notifications> {
     try {
       const notificationId = v4();
       const notification = await redis.hmset(
@@ -59,7 +51,7 @@ export class Notifications {
           id: notificationId,
           userId,
           type,
-          date: Date.now(),
+          date: new Date(),
           read: false
         }
       );
@@ -70,8 +62,14 @@ export class Notifications {
       );
       if (!userNotifications)
         throw new Error(`Failed to set user notifications`);
-
-      return true;
+      
+      const getNotification = await redis.hgetall(`notifications-${notificationId}`)
+      const returnValue = {
+        ...getNotification,
+        date: new Date(getNotification.date),
+        read: getNotification.read === "true" ? true : false
+      }
+      return returnValue
     } catch (err) {
       console.log(err);
       return err;
@@ -97,12 +95,12 @@ export class Notifications {
             await redis.lrem(`user-notifications-${userId}`, 1, notificationId);
             return await notifications;
           } else {
-            redis.expire(`notifications-${notificationId}`, 604800);
+            // redis.expire(`notifications-${notificationId}`, 604800);
             const notificationClass = new Notifications({
               ...notification,
+              date: new Date(notification.date),
               read: notification.read === "true" ? true : false
             })
-
             return [
               ...(await notifications),
               notificationClass
