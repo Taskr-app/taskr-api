@@ -49,6 +49,7 @@ describe('User Resolver', () => {
           verificationLink: sendVerificationLink.data!.sendVerificationLink
         }
       });
+
       const user = await User.findOne({ email: mockUser.email });
 
       expect(user!.email).toEqual(mockUser.email);

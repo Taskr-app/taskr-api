@@ -26,7 +26,6 @@ import { ImageResponse } from './types/ImageResponse';
 import { v4 } from 'uuid';
 import { LoginResponse } from './types/LoginResponse';
 import { rateLimit, isAuth } from './middleware';
-import { createNotification } from './middleware/createNotification';
 
 @Resolver()
 export class UserResolver {
@@ -105,7 +104,7 @@ export class UserResolver {
   }
 
   @Mutation(() => LoginResponse)
-  @UseMiddleware(rateLimit(10), createNotification)
+  @UseMiddleware(rateLimit(10))
   async register(
     @Arg('email') email: string,
     @Arg('verificationLink') verificationLink: string,
