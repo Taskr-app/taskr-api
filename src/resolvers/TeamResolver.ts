@@ -18,6 +18,7 @@ import { transporter } from "../services/emails/transporter";
 import { teamInviteEmail } from "../services/emails/teamInviteEmail";
 import { Project } from "../entity/Project";
 import { isAuth, rateLimit, isOwner } from "./middleware";
+import { uniqBy } from "lodash";
 
 const TeamBaseResolver = createBaseResolver("Team", Team);
 
@@ -131,7 +132,7 @@ export class TeamResolver extends TeamBaseResolver {
       if (!user) throw new Error(`This user doesn't exist`);
       const team = await Team.findOne({ where: { id: teamId } });
       if (!team) throw new Error(`This team doesn't exist`);
-      team.members = [...team.members, user];
+      team.members = uniqBy([...team.members, user], 'id');
       await team.save();
       await redis.del(`team-invite-${email}`);
       return true;
