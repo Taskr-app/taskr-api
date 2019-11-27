@@ -72,15 +72,15 @@ describe("Task resolver", () => {
     it("should update the task in a list and return it", async () => {
       const { data, errors } = await mutate({
         mutation: gql`
-          mutation UpdateTask($taskId: ID!, $name: String) {
-            updateTask(taskId: $taskId, name: $name) {
+          mutation UpdateTask($id: ID!, $name: String) {
+            updateTask(id: $id, name: $name) {
               id
               name
             }
           }
         `,
         variables: {
-          taskId: createdTask.data!.createTask.id,
+          id: createdTask.data!.createTask.id,
           name: mockTask.updatedName
         }
       });

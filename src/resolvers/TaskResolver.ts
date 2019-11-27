@@ -14,11 +14,15 @@ import {
 import { Task } from "../entity/Task";
 import { List } from "../entity/List";
 import { isAuth } from "./middleware";
+import { User } from "../entity/User";
+import { uniqBy } from "lodash";
 
 const topics = {
   create: "CREATE_TASK",
   update: "UPDATE_TASK",
-  delete: "DELETE_TASK"
+  delete: "DELETE_TASK",
+  addMember: "ADD_TASK_MEMBER",
+  removeMember: "REMOVE_TASK_MEMBER"
 }
 
 @Resolver()
@@ -71,14 +75,14 @@ export class TaskResolver {
   @UseMiddleware(isAuth)
   async updateTask(
     @PubSub(topics.update) publish: Publisher<Task>,
-    @Arg("taskId", () => ID) taskId: number,
+    @Arg("id", () => ID) id: number,
     @Arg("listId", () => ID, { nullable: true }) listId: number,
     @Arg("name", { nullable: true }) name: string,
     @Arg("desc", { nullable: true }) desc: string,
     @Arg("dueDate", { nullable: true }) dueDate: Date
   ) {
     try {
-      const task = await Task.findOne({ where: { id: taskId } })
+      const task = await Task.findOne({ where: { id } })
       if (!task) throw new Error(`This task doesn't exist`)
       if (listId) {
         const list = await List.findOne({ where: { id: listId } })
@@ -109,6 +113,50 @@ export class TaskResolver {
       await publish(task)
       await task.remove()
       return true
+    } catch (err) {
+      console.log(err);
+      return err;
+    }
+  }
+
+  @Mutation(() => Boolean)
+  @UseMiddleware(isAuth)
+  async addTaskMember(
+    @PubSub(topics.addMember) publish: Publisher<Task>,
+    @Arg("id", () => ID) id: number,
+    @Arg('userId', () => ID) userId: number
+  ) {
+    try {
+      const task = await Task.findOne({ where: { id } })
+      if (!task) throw new Error(`This task doesn't exist`)
+      const user = await User.findOne({ where: { id: userId } })
+      if (!user) throw new Error(`This user doesn't exist`)
+      task.users = uniqBy([...task.users, user], 'id');
+      await publish(task);
+      await task.save();
+      return true;
+    } catch (err) {
+      console.log(err)
+      return err;
+    }
+  }
+
+  @Mutation(() => Boolean)
+  @UseMiddleware(isAuth)
+  async removeTaskMember(
+    @PubSub(topics.removeMember) publish: Publisher<Task>,
+    @Arg('id', () => ID) id: number,
+    @Arg('userId', () => ID) userId: string
+  ) {
+    try {
+      const task = await Task.findOne({ where: { id } })
+      if (!task) throw new Error(`This task doesn't exist`)
+      const user = await User.findOne({ where: { id: userId } })
+      if (!user) throw new Error(`This user doesn't exist`);
+      task.users = task.users.filter(user => user.id !== parseInt(userId))
+      await publish(task)
+      await task.save();
+      return true;
     } catch (err) {
       console.log(err);
       return err;
@@ -146,5 +194,27 @@ export class TaskResolver {
     @Arg("taskId", () => Int) _taskId: number
   ) {
     return deletedTask
+  }
+
+  @Subscription(() => Task, {
+    topics: topics.addMember,
+    filter: ({ payload, args }) => args.taskId === payload.id
+  })
+  addedTaskMember(
+    @Root() addedTaskMember: Task,
+    @Arg("taskId", () => Int) _taskId: number
+  ) {
+    return addedTaskMember
+  }
+
+  @Subscription(() => Task, {
+    topics: topics.removeMember,
+    filter: ({ payload, args }) => args.taskId === payload.id
+  })
+  removedTaskMember(
+    @Root() removeTaskMember: Task,
+    @Arg("taskId", () => Int) _taskId: number
+  ) {
+    return removeTaskMember
   }
 }

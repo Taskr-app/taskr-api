@@ -3,6 +3,7 @@ import { Entity, BaseEntity, PrimaryGeneratedColumn, Column, CreateDateColumn, U
 import { List } from "./List";
 import { Label } from "./Label";
 import { Project } from "./Project";
+import { User } from "./User";
 
 @ObjectType()
 @Entity('tasks')
@@ -63,4 +64,11 @@ export class Task extends BaseEntity {
   @ManyToMany(() => Label, label => label.tasks)
   @JoinTable()
   labels: Label[]
+
+  @Field(() => [User])
+  @ManyToMany(() => User, user => user.tasks, {
+    eager: true
+  })
+  @JoinTable()
+  users: User[]
 }
