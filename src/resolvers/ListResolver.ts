@@ -8,11 +8,13 @@ import {
   PubSubEngine,
   PubSub,
   Subscription,
-  Root
+  Root,
+  Query
 } from 'type-graphql';
 import { List } from '../entity/List';
 import { isAuth } from '../services/auth/isAuth';
 import { Project } from '../entity/Project';
+import { createQueryBuilder } from 'typeorm';
 
 const ListBaseResolver = createBaseResolver('List', List);
 const buffer = 16384;
@@ -20,7 +22,8 @@ const buffer = 16384;
 const topics = {
   create: 'CREATE_LIST',
   update: 'UPDATE_LIST',
-  delete: 'DELETE_LIST'
+  delete: 'DELETE_LIST',
+  move: 'MOVE_LIST'
 };
 
 @Resolver()
@@ -111,7 +114,15 @@ export class ListResolver extends ListBaseResolver {
     return list;
   }
 
-  // update name
+  @Subscription({
+    topics: topics.move,
+    filter: ({ payload, args }) =>
+      payload.project.id === parseInt(args.projectId)
+  })
+  onListMoved(@Root() list: List, @Arg('projectId', () => ID) _: string): List {
+    return list;
+  }
+
   @Mutation(() => Boolean)
   @UseMiddleware(isAuth)
   async updateListName(
@@ -132,10 +143,10 @@ export class ListResolver extends ListBaseResolver {
     }
   }
 
-  // update position
   @Mutation(() => Boolean)
   @UseMiddleware(isAuth)
   async updateListPos(
+    @PubSub() pubSub: PubSubEngine,
     @Arg('id', () => ID) id: string,
     @Arg('aboveId', () => ID, { nullable: true }) aboveId?: string,
     @Arg('belowId', () => ID, { nullable: true }) belowId?: string
@@ -191,9 +202,25 @@ export class ListResolver extends ListBaseResolver {
       // renumber the cards and nearby cards
 
       await targetList.save();
+      await pubSub.publish(topics.move, targetList);
       return true;
     } catch (err) {
       console.log(err);
+      return err;
+    }
+  }
+
+  @Query(() => [List])
+  @UseMiddleware(isAuth)
+  async getProjectLists(@Arg('projectId', () => ID) projectId: string) {
+    try {
+      const lists = await createQueryBuilder(List, 'lists')
+        .where(`"projectId" = :id`, { id: projectId })
+        .orderBy('lists.pos', 'ASC')
+        .getMany();
+
+      return lists;
+    } catch (err) {
       return err;
     }
   }
