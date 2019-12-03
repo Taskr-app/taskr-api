@@ -58,7 +58,7 @@ describe("Team Resolver", () => {
 
       expect(res.data).toBeDefined();
       expect(res.errors).toBeUndefined();
-    });
+    }, 15000);
   });
 
   describe("CreateTeam and DeleteTeam mutation", () => {
@@ -98,7 +98,7 @@ describe("Team Resolver", () => {
 
       expect(deleteTeam.data).toBeDefined();
       expect(deleteTeam.errors).toBeUndefined();
-    });
+    }, 10000);
   });
 
   describe("SendTeamInviteLink and AcceptTeamInviteLink mutation", () => {

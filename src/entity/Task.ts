@@ -1,6 +1,9 @@
 import { ObjectType, Field, ID } from "type-graphql";
-import { Entity, BaseEntity, PrimaryGeneratedColumn, Column, CreateDateColumn, UpdateDateColumn, ManyToOne, BeforeInsert } from "typeorm";
+import { Entity, BaseEntity, PrimaryGeneratedColumn, Column, CreateDateColumn, UpdateDateColumn, ManyToOne, BeforeInsert, ManyToMany, JoinTable } from "typeorm";
 import { List } from "./List";
+import { Label } from "./Label";
+import { Project } from "./Project";
+import { User } from "./User";
 
 @ObjectType()
 @Entity('tasks')
@@ -51,4 +54,21 @@ export class Task extends BaseEntity {
     nullable: false
   })
   list: List
+
+  @Field(() => Project)
+  @ManyToOne(() => Project, {
+    nullable: false
+  })
+  project: Project
+
+  @ManyToMany(() => Label, label => label.tasks)
+  @JoinTable()
+  labels: Label[]
+
+  @Field(() => [User])
+  @ManyToMany(() => User, user => user.tasks, {
+    eager: true
+  })
+  @JoinTable()
+  users: User[]
 }

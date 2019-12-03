@@ -14,6 +14,7 @@ import {
 import { ObjectType, Field, ID } from 'type-graphql';
 import { Project } from './Project';
 import { Team } from './Team';
+import { Task } from './Task';
 
 @ObjectType()
 @Entity('users')
@@ -75,4 +76,8 @@ export class User extends BaseEntity {
   @ManyToMany(() => Team, team => team.members)
   @JoinTable()
   teams: Team[];
+
+  @Field(() => [Task])
+  @ManyToMany(() => Task, task => task.users)
+  tasks: Task[]
 }

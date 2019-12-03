@@ -7,17 +7,16 @@ import {
   ID,
   Query
 } from 'type-graphql';
-import { isAuth, isOwner } from '../services/auth/isAuth';
 import { Project } from '../entity/Project';
 import { MyContext } from '../services/context';
 import { User } from '../entity/User';
-import { rateLimit } from '../services/rate-limit';
 import { v4 } from 'uuid';
 import { redis } from '../services/redis';
 import { projectInviteEmail } from '../services/emails/projectInviteEmail';
 import { transporter } from '../services/emails/transporter';
 import { Team } from '../entity/Team';
 import { generateProjectLink } from '../services/links';
+import { isAuth, isOwner, rateLimit } from './middleware';
 
 @Resolver()
 export class ProjectResolver {

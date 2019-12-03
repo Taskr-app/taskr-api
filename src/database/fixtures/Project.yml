@@ -54,3 +54,4 @@ items:
     members:
       - '@user2'
       - '@user3'
+      - '@user1'
