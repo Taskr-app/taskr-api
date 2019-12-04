@@ -56,9 +56,6 @@ jobs:
             - dependency-cache-{{ checksum "yarn.lock" }}
             - dependency-cache-
       - run:
-          name: Load fixtures
-          command: yarn db:seed
-      - run:
           name: "Api test"
           command: yarn test
 
