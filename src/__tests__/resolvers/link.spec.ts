@@ -1,19 +1,19 @@
 import { gql } from "apollo-server-express";
-import { testServer, createTestDb, closeTestDb } from "../mocks/server";
-import { Connection } from "typeorm";
+import { testServer, createTestDbConnection, closeTestDb } from "../mocks/server";
 import faker from "faker";
 import { createTestClient } from "apollo-server-testing";
+import { Connection } from "typeorm";
 const { query, mutate } = createTestClient(testServer);
 
 describe("Team Resolver", () => {
-  let connection: Connection;
+  let connection: Connection
   beforeAll(async () => {
-    connection = await createTestDb();
+    connection = await createTestDbConnection();
   });
 
-  afterAll(() => {
-    closeTestDb(connection);
-  });
+  afterAll(async () => {
+    await closeTestDb(connection)
+  })
 
   const mocks = {
     email: faker.internet.email(),

@@ -2,10 +2,8 @@ import 'dotenv/config';
 import { Response } from 'express';
 import { ApolloServer } from 'apollo-server-express';
 import { buildSchemaSync } from 'type-graphql';
-import { exec } from 'child_process';
 import { sign } from 'jsonwebtoken';
 import { Connection, createConnection } from 'typeorm';
-import { redis } from '../../services/redis';
 import resolvers from '../../resolvers';
 
 export const testServer = new ApolloServer({
@@ -33,11 +31,10 @@ export const testServer = new ApolloServer({
   }
 });
 
-export const createTestDb = async () => {
+export const createTestDbConnection = async () => {
   try {
-    await exec('yarn db:seed');
-    await redis.flushall();
-    return await createConnection();
+    const connection = await createConnection();
+    return connection
   } catch (err) {
     console.log(err);
     return err;
@@ -47,8 +44,6 @@ export const createTestDb = async () => {
 export const closeTestDb = async (connection: Connection) => {
   try {
     await connection.close();
-    await redis.flushall();
-    await redis.disconnect();
     return true;
   } catch (err) {
     console.log(err);

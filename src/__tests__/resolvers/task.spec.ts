@@ -1,21 +1,23 @@
-import { createTestClient } from "apollo-server-testing";
-import { gql } from "apollo-server-express";
+import { createTestClient } from 'apollo-server-testing';
+import { gql } from 'apollo-server-express';
 
-import { testServer, createTestDb, closeTestDb } from "../mocks/server";
-import { Connection } from "typeorm";
-import faker from "faker";
-import { GraphQLResponse } from "graphql-extensions";
+import { testServer, createTestDbConnection, closeTestDb } from '../mocks/server';
+
+import faker from 'faker';
+import { GraphQLResponse } from 'graphql-extensions';
+import { Connection } from 'typeorm';
 
 const { query, mutate } = createTestClient(testServer);
 
-describe("Task resolver", () => {
-  let connection: Connection;
+describe('Task resolver', () => {
+  let connection: Connection
   beforeAll(async () => {
-    connection = await createTestDb();
+    connection = await createTestDbConnection();
   });
-  afterAll(() => {
-    closeTestDb(connection);
-  });
+
+  afterAll(async () => {
+    await closeTestDb(connection)
+  })
 
   const mockTask = {
     listId: 1,
@@ -24,9 +26,9 @@ describe("Task resolver", () => {
     desc: faker.name.jobDescriptor()
   };
 
-  describe("CRUD task", () => {
+  describe('CRUD task', () => {
     let createdTask: GraphQLResponse;
-    it("should create a task in a list", async () => {
+    it('should create a task in a list', async () => {
       const createTask = await mutate({
         mutation: gql`
           mutation CreateTask($listId: ID!, $name: String!, $desc: String) {
@@ -49,7 +51,7 @@ describe("Task resolver", () => {
       createdTask = createTask;
     });
 
-    it("should retrieve all tasks in a list", async () => {
+    it('should retrieve all tasks in a list', async () => {
       const { data, errors } = await query({
         query: gql`
           query GetListTasks($listId: ID!) {
@@ -65,11 +67,11 @@ describe("Task resolver", () => {
       });
 
       expect(data).toBeDefined();
-      expect(data!.getListTasks.length).toBeGreaterThanOrEqual(1)
+      expect(data!.getListTasks.length).toBeGreaterThanOrEqual(1);
       expect(errors).toBeUndefined();
     });
 
-    it("should update the task in a list and return it", async () => {
+    it('should update the task in a list and return it', async () => {
       const { data, errors } = await mutate({
         mutation: gql`
           mutation UpdateTask($id: ID!, $name: String) {
@@ -90,7 +92,7 @@ describe("Task resolver", () => {
       expect(errors).toBeUndefined();
     });
 
-    it("should delete the task and return true", async () => {
+    it('should delete the task and return true', async () => {
       const { data, errors } = await mutate({
         mutation: gql`
           mutation DeleteTask($taskId: ID!) {

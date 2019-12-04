@@ -1,29 +1,29 @@
-import { gql } from "apollo-server-express";
-import { testServer, createTestDb, closeTestDb } from "../mocks/server";
-import { Connection } from "typeorm";
-import faker from "faker";
+import { gql } from 'apollo-server-express';
+import { testServer, createTestDbConnection, closeTestDb } from '../mocks/server';
+import faker from 'faker';
 
-import { createTestClient } from "apollo-server-testing";
-import { Team } from "../../entity/Team";
+import { createTestClient } from 'apollo-server-testing';
+import { Team } from '../../entity/Team';
+import { Connection } from 'typeorm';
 const { query, mutate } = createTestClient(testServer);
 
-describe("Team Resolver", () => {
-  let connection: Connection;
+describe('Team Resolver', () => {
+  let connection: Connection
   beforeAll(async () => {
-    connection = await createTestDb();
+    connection = await createTestDbConnection();
   });
 
-  afterAll(() => {
-    closeTestDb(connection);
-  });
+  afterAll(async () => {
+    await closeTestDb(connection)
+  })
 
   const mockTeam = {
     name: faker.random.word(),
     email: faker.internet.email()
   };
 
-  describe("GetUserTeam query", () => {
-    it("should retrieve a team from the user using teamId", async () => {
+  describe('GetUserTeam query', () => {
+    it('should retrieve a team from the user using teamId', async () => {
       const res = await query({
         query: gql`
           query GetUserTeam($id: ID!) {
@@ -43,8 +43,8 @@ describe("Team Resolver", () => {
     });
   });
 
-  describe("GetUserTeams query", () => {
-    it("should retrieve all teams from the user", async () => {
+  describe('GetUserTeams query', () => {
+    it('should retrieve all teams from the user', async () => {
       const res = await query({
         query: gql`
           query GetUserTeams {
@@ -58,11 +58,11 @@ describe("Team Resolver", () => {
 
       expect(res.data).toBeDefined();
       expect(res.errors).toBeUndefined();
-    }, 15000);
+    }, 30000);
   });
 
-  describe("CreateTeam and DeleteTeam mutation", () => {
-    it("should create a team from the db and then delete it", async () => {
+  describe('CreateTeam and DeleteTeam mutation', () => {
+    it('should create a team from the db and then delete it', async () => {
       const res = await mutate({
         mutation: gql`
           mutation CreateTeam($name: String!) {
@@ -101,8 +101,8 @@ describe("Team Resolver", () => {
     }, 10000);
   });
 
-  describe("SendTeamInviteLink and AcceptTeamInviteLink mutation", () => {
-    it("should send a team invite to an email address and add a user to the team", async () => {
+  describe('SendTeamInviteLink and AcceptTeamInviteLink mutation', () => {
+    it('should send a team invite to an email address and add a user to the team', async () => {
       const teamInviteLink = await mutate({
         mutation: gql`
           mutation SendTeamInviteLink($teamId: ID!, $email: String!) {
