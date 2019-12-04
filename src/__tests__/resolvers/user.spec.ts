@@ -1,21 +1,21 @@
 import { gql } from 'apollo-server-express';
-import { testServer, createTestDb, closeTestDb } from '../mocks/server';
-import { Connection } from 'typeorm';
+import { testServer, createTestDbConnection, closeTestDb } from '../mocks/server';
 import { User } from '../../entity/User';
 import faker from 'faker';
 
 import { createTestClient } from 'apollo-server-testing';
+import { Connection } from 'typeorm';
 const { query, mutate } = createTestClient(testServer);
 
 describe('User Resolver', () => {
-  let connection: Connection;
+  let connection: Connection
   beforeAll(async () => {
-    connection = await createTestDb();
+    connection = await createTestDbConnection();
   });
 
-  afterAll(() => {
-    closeTestDb(connection);
-  });
+  afterAll(async () => {
+    await closeTestDb(connection)
+  })
 
   const mockUser = {
     email: faker.internet.email(),
@@ -144,7 +144,7 @@ describe('User Resolver', () => {
       expect(forgotPassword.errors).toBeUndefined();
     });
 
-    it("should fail login on old password and pass using new password", async () => {
+    it('should fail login on old password and pass using new password', async () => {
       const incorrectLogin = await mutate({
         mutation: gql`
           mutation Login($email: String!, $password: String!) {
@@ -171,7 +171,7 @@ describe('User Resolver', () => {
 
       expect(successfulLogin.data).toBeDefined();
       expect(successfulLogin.errors).toBeUndefined();
-    })
+    });
   });
 
   describe('Change password mutation', () => {

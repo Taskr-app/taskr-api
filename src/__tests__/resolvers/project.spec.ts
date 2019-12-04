@@ -1,22 +1,23 @@
 import { createTestClient } from 'apollo-server-testing';
 import { gql } from 'apollo-server-express';
 
-import { testServer, createTestDb, closeTestDb } from '../mocks/server';
-import { Connection } from 'typeorm';
+import { testServer, createTestDbConnection, closeTestDb } from '../mocks/server';
 import faker from 'faker';
 import { Project } from '../../entity/Project';
 import { GraphQLResponse } from 'graphql-extensions';
+import { Connection } from 'typeorm';
 
 const { query, mutate } = createTestClient(testServer);
 
 describe('Project Resolver', () => {
-  let connection: Connection;
+  let connection: Connection
   beforeAll(async () => {
-    connection = await createTestDb();
+    connection = await createTestDbConnection();
   });
-  afterAll(() => {
-    closeTestDb(connection);
-  });
+
+  afterAll(async () => {
+    await closeTestDb(connection)
+  })
 
   const mockProject = {
     name: faker.commerce.productName(),
