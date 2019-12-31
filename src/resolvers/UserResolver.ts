@@ -20,12 +20,13 @@ import { verificationEmail } from '../services/emails/verificationEmail';
 import { forgotPasswordEmail } from '../services/emails/forgotPassword';
 import { sendRefreshToken } from '../services/auth/sendRefreshToken';
 import { createOAuth2Client, verifyIdToken } from '../services/auth/google';
-import { cloudinary } from '../services/cloudinary';
 import { redis } from '../services/redis';
-import { ImageResponse } from './types/ImageResponse';
 import { v4 } from 'uuid';
 import { LoginResponse } from './types/LoginResponse';
 import { rateLimit, isAuth } from './middleware';
+import { GraphQLUpload } from 'graphql-upload';
+import { Upload } from './types/Upload';
+import { cloudinary } from '../services/cloudinary';
 
 @Resolver()
 export class UserResolver {
@@ -267,39 +268,28 @@ export class UserResolver {
     }
   }
 
-  @Mutation(() => ImageResponse)
-  @UseMiddleware(isAuth)
-  async createAvatar(
-    @Arg('image') image: string,
+  @Mutation(() => Boolean)
+  @UseMiddleware(isAuth, rateLimit(5))
+  async uploadAvatar(
+    @Arg('image', () => GraphQLUpload) image: Upload,
     @Ctx() { payload }: MyContext
   ) {
     try {
       const user = await User.findOne({ id: payload!.userId });
-      const res = await cloudinary.uploader.upload(image);
+      if (!user) throw new Error(`This user doesn't exist`)
+      if (user.avatar) {
+        await cloudinary.uploader.destroy(user.avatar)
+      }
+      const { createReadStream } = image;
+
+      const stream = createReadStream();
+      const imagePath = (stream as any).path;
+      if (!imagePath)
+        throw new Error('A path for the image could not be created');
+      const res = await cloudinary.uploader.upload(imagePath);
       user!.avatar = res.public_id;
       await user!.save();
-      return res;
-    } catch (err) {
-      console.log(err);
-      return err;
-    }
-  }
-
-  @Mutation(() => ImageResponse)
-  @UseMiddleware(isAuth)
-  async updateAvatar(
-    @Arg('image') image: string,
-    @Ctx() { payload }: MyContext
-  ) {
-    try {
-      const user = await User.findOne({ id: payload!.userId });
-      // destroy current user's avatar from storage
-      await cloudinary.uploader.destroy(user!.avatar);
-
-      const res = await cloudinary.uploader.upload(image);
-      user!.avatar = res.public_id;
-      await user!.save();
-      return res;
+      return true;
     } catch (err) {
       console.log(err);
       return err;
