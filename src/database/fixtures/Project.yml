@@ -29,7 +29,7 @@ items:
       - '@user4'
     team: '@team1'
   project4:
-    name: '{{commerce.productName{{'
+    name: '{{commerce.productName}}'
     desc: '{{lorem.sentence}}'
     owner: '@user1'
     members:
