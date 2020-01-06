@@ -11,10 +11,20 @@ import {
   ManyToMany,
   JoinTable
 } from 'typeorm';
-import { ObjectType, Field, ID } from 'type-graphql';
+import { ObjectType, Field, ID, registerEnumType } from 'type-graphql';
 import { Project } from './Project';
 import { Team } from './Team';
 import { Task } from './Task';
+
+
+export enum UserAuthType {
+  WEBSITE = 'website',
+  GOOGLE = 'google'
+}
+registerEnumType(UserAuthType, {
+  name: "UserAuthType",
+  description: "User auth type for auth column (WEBSITE | GOOGLE)"
+})
 
 @ObjectType()
 @Entity('users')
@@ -40,11 +50,14 @@ export class User extends BaseEntity {
 
   @Column('int', { default: 0 })
   tokenVersion: number;
-  // TODO: make enum. 'website' | 'google'
 
-  @Field()
-  @Column({ default: 'website' })
-  auth: string;
+  @Field(() => UserAuthType)
+  @Column({
+    type: 'enum',
+    enum: UserAuthType,
+    default: UserAuthType.WEBSITE
+  })
+  auth: UserAuthType;
 
   @Field()
   @CreateDateColumn()
