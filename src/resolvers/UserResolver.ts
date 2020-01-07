@@ -202,7 +202,7 @@ export class UserResolver {
   ) {
     const client = await createOAuth2Client();
 
-    const scopes = ['openid', 'email'];
+    const scopes = ['openid', 'email', 'profile'];
 
     const url = client.generateAuthUrl({
       access_type: 'offline',
@@ -238,16 +238,17 @@ export class UserResolver {
 
       if (!user) {
         // register user to db if they don't exist in system
-        const username = payload.email!.split('@')[0];
-        user = await User.create({
+        user = User.create({
           email: payload.email,
-          username,
+          username: payload.name,
           auth: UserAuthType.GOOGLE
-        }).save();
-
-        if (!user) {
-          throw new Error('Failed to create user');
+        });
+        if (payload.picture) {
+          let res = await cloudinary.uploader.upload(payload.picture);
+          user.avatar = res.public_id
         }
+
+        await user.save();
       }
 
       if (!tokens.refresh_token) {
@@ -277,9 +278,9 @@ export class UserResolver {
   ) {
     try {
       const user = await User.findOne({ id: payload!.userId });
-      if (!user) throw new Error(`This user doesn't exist`)
+      if (!user) throw new Error(`This user doesn't exist`);
       if (user.avatar) {
-        await cloudinary.uploader.destroy(user.avatar)
+        await cloudinary.uploader.destroy(user.avatar);
       }
       const { createReadStream } = image;
 
@@ -305,7 +306,7 @@ export class UserResolver {
   ) {
     try {
       const user = await User.findOne({ id: payload!.userId });
-      if (!user) throw new Error('User not found')
+      if (!user) throw new Error('User not found');
       user.username = username;
       await user!.save();
       return true;
@@ -322,11 +323,11 @@ export class UserResolver {
     @Ctx() { payload }: MyContext
   ) {
     try {
-      const user = await User.findOne({ id: payload!.userId })
-      if (!user) throw new Error('User not found')
-      const existingUserEmail = await User.findOne({ email })
+      const user = await User.findOne({ id: payload!.userId });
+      if (!user) throw new Error('User not found');
+      const existingUserEmail = await User.findOne({ email });
       if (existingUserEmail) {
-        throw new Error('Sorry, this email already exists')
+        throw new Error('Sorry, this email already exists');
       }
 
       const verificationLink = v4();
@@ -334,8 +335,8 @@ export class UserResolver {
         email: user.email,
         link: verificationLink
       });
-      transporter.sendMail(newEmail(email, verificationLink, user.email))
-      return true
+      transporter.sendMail(newEmail(email, verificationLink, user.email));
+      return true;
     } catch (err) {
       console.log(err);
       return err;
@@ -347,16 +348,22 @@ export class UserResolver {
   async updateEmail(
     @Arg('email') email: string,
     @Arg('password', { nullable: true }) password: string,
-    @Arg('verificationLink') verificationLink: string,
+    @Arg('verificationLink') verificationLink: string
   ) {
     try {
-      const { link: storedLink, email: storedEmail } = await redis.hgetall(`new-email-${email}`)
-      if (storedLink !== verificationLink) throw new Error('This link has expired');
-      const user = await User.findOne({ email: storedEmail })
-      if (!user) throw new Error('The user email you have requested the email change no longer exists');
+      const { link: storedLink, email: storedEmail } = await redis.hgetall(
+        `new-email-${email}`
+      );
+      if (storedLink !== verificationLink)
+        throw new Error('This link has expired');
+      const user = await User.findOne({ email: storedEmail });
+      if (!user)
+        throw new Error(
+          'The user email you have requested the email change no longer exists'
+        );
 
       if (user.auth === UserAuthType.GOOGLE && password) {
-        user.password = await hash(password, 12)
+        user.password = await hash(password, 12);
       }
       user.email = email;
       user.auth = UserAuthType.WEBSITE;
