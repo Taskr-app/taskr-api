@@ -5,9 +5,9 @@ import {
   Arg,
   Mutation,
   ID
-} from "type-graphql";
-import { BaseEntity } from "typeorm";
-import { isAuth } from "./middleware";
+} from 'type-graphql';
+import { BaseEntity } from 'typeorm';
+import { isAuth } from './middleware';
 
 export function createBaseResolver<T extends typeof BaseEntity>(
   suffix: string,
@@ -31,10 +31,10 @@ export function createBaseResolver<T extends typeof BaseEntity>(
 
     @Query(() => Entity, { name: `get${suffix}` })
     @UseMiddleware(isAuth)
-    async get(@Arg("id", () => ID) id: number) {
+    async get(@Arg('id', () => ID) id: number) {
       try {
         const entity = await Entity.findOne({ where: { id } });
-        if (!entity) throw new Error(`This ${suffix} doesn't exist`)
+        if (!entity) throw new Error(`This ${suffix} doesn't exist`);
         return entity;
       } catch (err) {
         console.log(err);
@@ -44,7 +44,7 @@ export function createBaseResolver<T extends typeof BaseEntity>(
 
     @Mutation(() => Entity, { name: `delete${suffix}` })
     @UseMiddleware(isAuth)
-    async delete(@Arg("id", () => ID) id: number) {
+    async delete(@Arg('id', () => ID) id: number) {
       try {
         const entity = await Entity.findOne({ where: { id } });
         if (!entity) {

@@ -43,7 +43,7 @@ export class NotificationsResolver {
       const notifications = await Notifications.find({
         userId: payload!.userId
       });
-      if (!notifications) throw new Error(`Notifications doesn't exist`);
+      if (!notifications) throw new Error('Notifications doesn\'t exist');
       return notifications;
     } catch (err) {
       console.log(err);
@@ -55,7 +55,7 @@ export class NotificationsResolver {
   async getNotification(@Arg('id', () => ID) id: string) {
     try {
       const notification = await Notifications.findOne({ id });
-      if (!notification) throw new Error(`This notification doesn't exist`);
+      if (!notification) throw new Error('This notification doesn\'t exist');
       return notification;
     } catch (err) {
       console.log(err);

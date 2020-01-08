@@ -163,7 +163,7 @@ export class UserResolver {
       // if user's password from db is NULL
       if (!user.password) {
         throw new Error(
-          `This account doesn't have a password set. Do you normally login with google?`
+          'This account doesn\'t have a password set. Do you normally login with google?'
         );
       }
 
@@ -245,7 +245,7 @@ export class UserResolver {
         });
         if (payload.picture) {
           let res = await cloudinary.uploader.upload(payload.picture);
-          user.avatar = res.public_id
+          user.avatar = res.public_id;
         }
 
         await user.save();
@@ -278,7 +278,7 @@ export class UserResolver {
   ) {
     try {
       const user = await User.findOne({ id: payload!.userId });
-      if (!user) throw new Error(`This user doesn't exist`);
+      if (!user) throw new Error('This user doesn\'t exist');
       if (user.avatar) {
         await cloudinary.uploader.destroy(user.avatar);
       }
@@ -417,7 +417,7 @@ export class UserResolver {
         throw new Error('This link has expired');
       }
       const user = await User.findOne({ email });
-      if (!user) throw new Error("This user doesn't exist");
+      if (!user) throw new Error('This user doesn\'t exist');
       const hashedPassword = await hash(password, 12);
       user.password = hashedPassword;
       await user.save();
@@ -442,7 +442,7 @@ export class UserResolver {
       // if user's password from db is NULL
       if (!user.password) {
         throw new Error(
-          `This account doesn't have a password set. Do you normally login with google?`
+          'This account doesn\'t have a password set. Do you normally login with google?'
         );
       }
 

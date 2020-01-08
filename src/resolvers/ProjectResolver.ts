@@ -37,7 +37,7 @@ export class ProjectResolver {
 
       if (!project) {
         throw new Error(
-          `This project doesn't exist or you don't have access to it`
+          'This project doesn\'t exist or you don\'t have access to it'
         );
       }
 
@@ -56,11 +56,11 @@ export class ProjectResolver {
         .innerJoin('project.members', 'user', 'user.id = :userId', {
           userId: payload!.userId
         })
-        .innerJoinAndSelect("project.members", 'member')
-        .innerJoinAndSelect("project.owner", "owner")
+        .innerJoinAndSelect('project.members', 'member')
+        .innerJoinAndSelect('project.owner', 'owner')
         .getMany();
 
-      return projects
+      return projects;
     } catch (err) {
       console.log(err);
       return err;
@@ -84,7 +84,7 @@ export class ProjectResolver {
       });
       if (teamId) {
         let team = await Team.findOne({ where: { id: teamId } });
-        if (!team) throw new Error(`This team doesn't exist`);
+        if (!team) throw new Error('This team doesn\'t exist');
         project.team = team;
       }
       project.members = [user!];
@@ -96,7 +96,7 @@ export class ProjectResolver {
   }
 
   @Mutation(() => Boolean)
-  @UseMiddleware(isAuth, isOwner(Project, "id"))
+  @UseMiddleware(isAuth, isOwner(Project, 'id'))
   async updateProject(
     @Ctx() { entity: project }: { entity: Project },
     @Arg('id', () => ID) _id: number,
@@ -115,7 +115,7 @@ export class ProjectResolver {
 
       if (teamId) {
         const team = await Team.findOne({ where: { id: teamId } });
-        if (!team) throw new Error(`This team doesn't exist`);
+        if (!team) throw new Error('This team doesn\'t exist');
         project.team = team;
       }
 
@@ -128,16 +128,16 @@ export class ProjectResolver {
   }
 
   @Mutation(() => Boolean)
-  @UseMiddleware(isAuth, isOwner(Project, "id"))
+  @UseMiddleware(isAuth, isOwner(Project, 'id'))
   async deleteProject(
     @Arg('id', () => ID) _id: number,
     @Ctx() { entity: project }: { entity: Project }
   ) {
     try {
-      await project.remove()
-      return true
+      await project.remove();
+      return true;
     } catch (err) {
-      console.log(err)
+      console.log(err);
       return err;
     }
   }
@@ -152,7 +152,7 @@ export class ProjectResolver {
     try {
       const me = await User.findOne({ where: { id: payload!.userId } });
       const project = await Project.findOne({ where: { id: projectId } });
-      if (!project) throw new Error("Project doesn't exist");
+      if (!project) throw new Error('Project doesn\'t exist');
 
       const invitationLink = v4();
       await redis.hmset(`project-invite-${email}`, {
@@ -192,12 +192,12 @@ export class ProjectResolver {
       }
 
       const user = await User.findOne({ id: payload!.userId });
-      if (!user) throw new Error(`This user doesn't exist`);
+      if (!user) throw new Error('This user doesn\'t exist');
       const project = await Project.findOne({
         relations: ['members'],
         where: { id: projectId }
       });
-      if (!project) throw new Error(`This project doesn't exist`);
+      if (!project) throw new Error('This project doesn\'t exist');
       project.members = [...project.members, user];
       await project.save();
       await redis.del(`project-invite-${email}`);
@@ -212,7 +212,7 @@ export class ProjectResolver {
   async getPublicProjectLink(@Arg('projectId', () => ID) projectId: number) {
     try {
       const project = await Project.findOne({ where: { id: projectId } });
-      if (!project) throw new Error(`This project doesn't exist`);
+      if (!project) throw new Error('This project doesn\'t exist');
       const publicLink = generateProjectLink(project.id);
       return publicLink;
     } catch (err) {
@@ -230,15 +230,15 @@ export class ProjectResolver {
   ) {
     try {
       const me = await User.findOne({ where: { id: payload!.userId } });
-      if (!me) throw new Error(`This user doesn't exist`);
+      if (!me) throw new Error('This user doesn\'t exist');
       const project = await Project.findOne({
         relations: ['members'],
         where: { id: projectId }
       });
-      if (!project) throw new Error(`This project doesn't exist`);
+      if (!project) throw new Error('This project doesn\'t exist');
       const publicLink = generateProjectLink(project.id);
       if (publicLink !== link) {
-        throw new Error(`This link is either incorrect or has expired`);
+        throw new Error('This link is either incorrect or has expired');
       }
       project.members = [...project.members, me];
       await project.save();
