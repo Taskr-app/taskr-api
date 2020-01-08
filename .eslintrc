@@ -1,0 +1,30 @@
+{
+  "extends": ["prettier/@typescript-eslint"],
+  "plugins": ["@typescript-eslint"],
+  "overrides": [
+    {
+      "files": ["**/*.ts?(x)"],
+      "rules": {
+        "quotes": ["error", "single"],
+        "member-access": 0,
+        "object-literal-sort-keys": 0,
+        "no-console": 0,
+        "no-implicit-dependencies": 0,
+        "interface-name": 0
+      }
+    }
+  ],
+  "parser": "@typescript-eslint/parser",
+  "parserOptions": {
+    "ecmaVersion": 2020,
+    "ecmaFeatures": {
+      "modules": true
+    },
+    "sourceType": "module"
+  },
+  "env": {
+    "es6": true,
+    "node": true,
+    "jest": true
+  }
+}
