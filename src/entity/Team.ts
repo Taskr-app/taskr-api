@@ -8,13 +8,13 @@ import {
   ManyToMany,
   OneToMany,
   ManyToOne
-} from "typeorm";
-import { ObjectType, Field, ID } from "type-graphql";
-import { User } from "./User";
-import { Project } from "./Project";
+} from 'typeorm';
+import { ObjectType, Field, ID } from 'type-graphql';
+import { User } from './User';
+import { Project } from './Project';
 
 @ObjectType()
-@Entity("teams")
+@Entity('teams')
 export class Team extends BaseEntity {
   @Field(() => ID)
   @PrimaryGeneratedColumn()
@@ -47,7 +47,7 @@ export class Team extends BaseEntity {
     () => User,
     user => user.ownedTeams,
     {
-      onDelete: "CASCADE"
+      onDelete: 'CASCADE'
     }
   )
   owner: User;

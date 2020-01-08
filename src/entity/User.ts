@@ -16,15 +16,14 @@ import { Project } from './Project';
 import { Team } from './Team';
 import { Task } from './Task';
 
-
 export enum UserAuthType {
   WEBSITE = 'website',
   GOOGLE = 'google'
 }
 registerEnumType(UserAuthType, {
-  name: "UserAuthType",
-  description: "User auth type for auth column (WEBSITE | GOOGLE)"
-})
+  name: 'UserAuthType',
+  description: 'User auth type for auth column (WEBSITE | GOOGLE)'
+});
 
 @ObjectType()
 @Entity('users')
@@ -68,29 +67,46 @@ export class User extends BaseEntity {
   updated_at: Date;
 
   @Field(() => [Project])
-  @OneToMany(() => Project, project => project.owner, {
-    cascade: true,
-    eager: true
-  })
+  @OneToMany(
+    () => Project,
+    project => project.owner,
+    {
+      cascade: true,
+      eager: true
+    }
+  )
   ownedProjects: Project[];
 
   @Field(() => [Team])
-  @OneToMany(() => Team, team => team.owner, {
-    cascade: true,
-  })
-  ownedTeams: Team[]
+  @OneToMany(
+    () => Team,
+    team => team.owner,
+    {
+      cascade: true
+    }
+  )
+  ownedTeams: Team[];
 
   @Field(() => [Project])
-  @ManyToMany(() => Project, project => project.members)
+  @ManyToMany(
+    () => Project,
+    project => project.members
+  )
   @JoinTable()
   projects: Project[];
 
   @Field(() => [Team])
-  @ManyToMany(() => Team, team => team.members)
+  @ManyToMany(
+    () => Team,
+    team => team.members
+  )
   @JoinTable()
   teams: Team[];
 
   @Field(() => [Task])
-  @ManyToMany(() => Task, task => task.users)
-  tasks: Task[]
+  @ManyToMany(
+    () => Task,
+    task => task.users
+  )
+  tasks: Task[];
 }

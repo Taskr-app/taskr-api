@@ -1,12 +1,12 @@
-import "reflect-metadata";
-import "dotenv/config";
-import express from "express";
-import { createConnection } from "typeorm";
-import cors from "cors";
-import cookieParser from "cookie-parser";
-import { refreshAccessToken } from "./services/auth/refreshAccessToken";
-import { server } from "./services/server";
-import { createServer } from "http";
+import 'reflect-metadata';
+import 'dotenv/config';
+import express from 'express';
+import { createConnection } from 'typeorm';
+import cors from 'cors';
+import cookieParser from 'cookie-parser';
+import { refreshAccessToken } from './services/auth/refreshAccessToken';
+import { server } from './services/server';
+import { createServer } from 'http';
 
 const PORT = process.env.PORT || 4000;
 

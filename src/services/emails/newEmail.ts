@@ -11,7 +11,7 @@ export const newEmail = (
     to: email,
     subject: 'New email request | Taskr',
     html: emailTemplate({
-      header: `Looks like you've requested a new email`,
+      header: 'Looks like you\'ve requested a new email',
       body: `You're receiving this email because you've requested
       to change your email from ${previousEmail} to ${email}. Click the button
       below to change and confirm your new email address. Once you make the confirmation

@@ -1,5 +1,5 @@
-import { fromEmail } from "./transporter";
-import { emailTemplate } from "./template";
+import { fromEmail } from './transporter';
+import { emailTemplate } from './template';
 
 interface emailArgs {
   sender: string;
@@ -17,13 +17,13 @@ export const teamInviteEmail = ({
   return {
     from: fromEmail,
     to: email,
-    subject: "Team Invite | Taskr",
+    subject: 'Team Invite | Taskr',
     html: emailTemplate({
       header: `${sender} has sent you a team invite to ${teamName}`,
       body: `You've been invited as a team member to ${teamName}. All team projects will be shared across team members.`,
-      cta: "Accept team invitation",
+      cta: 'Accept team invitation',
       link: `${process.env.CLIENT_URL}/invite/team/success?email=${email}&id=${link}`,
-      footer: "This email will be invalid after 1 hour from being sent"
+      footer: 'This email will be invalid after 1 hour from being sent'
     })
   };
 };
