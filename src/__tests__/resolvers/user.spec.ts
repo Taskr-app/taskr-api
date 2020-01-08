@@ -1,26 +1,33 @@
 import { gql } from 'apollo-server-express';
-import { testServer, createTestDbConnection, closeTestDb } from '../mocks/server';
+import {
+  testServer,
+  createTestDbConnection,
+  closeTestDb
+} from '../mocks/server';
 import { User } from '../../entity/User';
 import faker from 'faker';
 
 import { createTestClient } from 'apollo-server-testing';
 import { Connection } from 'typeorm';
+import { redis } from '../../services/redis';
 const { query, mutate } = createTestClient(testServer);
 
 describe('User Resolver', () => {
-  let connection: Connection
+  let connection: Connection;
   beforeAll(async () => {
     connection = await createTestDbConnection();
   });
 
   afterAll(async () => {
-    await closeTestDb(connection)
-  })
+    await closeTestDb(connection);
+  });
 
   const mockUser = {
     email: faker.internet.email(),
     password: faker.internet.password(),
-    newPassword: faker.internet.password()
+    newPassword: faker.internet.password(),
+    newUsername: faker.internet.userName(),
+    newEmail: faker.internet.email()
   };
 
   describe('SendVerificationLink and Register mutation', () => {
@@ -206,6 +213,58 @@ describe('User Resolver', () => {
       expect(res.errors).toBeUndefined();
       expect(successfulLogin.data).toBeDefined();
       expect(successfulLogin.errors).toBeUndefined();
+    });
+  });
+
+  describe('Update username mutation', () => {
+    it("should change the user's username", async () => {
+      const res = await mutate({
+        mutation: gql`
+          mutation UpdateUsername($username: String!) {
+            updateUsername(username: $username)
+          }
+        `,
+        variables: { username: mockUser.newUsername }
+      });
+
+      expect(res.data).toBeDefined();
+      expect(res.errors).toBeUndefined();
+    });
+  });
+
+  describe('SendNewEmailLink and updateEmail mutations', () => {
+    it("should send a new-email link and update the user's email", async () => {
+      const { data, errors } = await mutate({
+        mutation: gql`
+          mutation SendNewEmailLink($email: String!) {
+            sendNewEmailLink(email: $email)
+          }
+        `,
+        variables: { email: mockUser.newEmail }
+      });
+
+      expect(data).toBeDefined();
+      expect(errors).toBeUndefined();
+
+      const { link } = await redis.hgetall(
+        `new-email-${mockUser.newEmail}`
+      );
+      expect(link).toBeDefined();
+
+      const res = await mutate({
+        mutation: gql`
+          mutation UpdateEmail($email: String!, $verificationLink: String!, $password: String) {
+            updateEmail(email:$email, verificationLink:$verificationLink, password:$password)
+          }
+        `,
+        variables: {
+          verificationLink: link,
+          email: mockUser.newEmail
+        }
+      });
+
+      expect(res.data).toBeDefined();
+      expect(res.errors).toBeUndefined();
     });
   });
 });

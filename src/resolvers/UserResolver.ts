@@ -282,8 +282,8 @@ export class UserResolver {
       if (user.avatar) {
         await cloudinary.uploader.destroy(user.avatar);
       }
-      const { createReadStream } = image;
 
+      const { createReadStream } = image;
       const stream = createReadStream();
       const imagePath = (stream as any).path;
       if (!imagePath)
