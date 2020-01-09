@@ -63,7 +63,7 @@ export class ListResolver extends ListBaseResolver {
         relations: ['project']
       });
       if (!list) {
-        throw new Error('Could not find List');
+        throw new Error(`Could not find List`);
       }
       await pubSub.publish(topics.delete, list);
       list.remove();
