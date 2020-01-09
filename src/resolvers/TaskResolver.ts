@@ -87,10 +87,10 @@ export class TaskResolver {
   ) {
     try {
       const task = await Task.findOne({ where: { id } });
-      if (!task) throw new Error("This task doesn't exist");
+      if (!task) throw new Error(`This task doesn't exist`);
       if (listId) {
         const list = await List.findOne({ where: { id: listId } });
-        if (!list) throw new Error("This list doesn't exist");
+        if (!list) throw new Error(`This list doesn't exist`);
         task.list = list;
       }
       task.name = name ? name : task.name;
@@ -198,7 +198,7 @@ export class TaskResolver {
         where: { id: taskId },
         relations: ['list']
       });
-      if (!task) throw new Error(`This task doesn't exist`);
+      if (!task) throw new Error("This task doesn't exist");
       await publish(task);
       await task.remove();
       return true;
