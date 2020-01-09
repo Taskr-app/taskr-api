@@ -116,8 +116,17 @@ export class ListResolver extends ListBaseResolver {
 
   @Subscription({
     topics: topics.move,
-    filter: ({ payload, args }) =>
-      payload.project.id === parseInt(args.projectId)
+    filter: ({ payload, args }) => {
+      try {
+        if (!payload.project) {
+          throw new Error('no payload project');
+        }
+        return payload.project.id === parseInt(args.projectId);
+      } catch (err) {
+        console.log(err);
+        return false;
+      }
+    }
   })
   onListMoved(@Root() list: List, @Arg('projectId', () => ID) _: string): List {
     return list;
@@ -165,7 +174,6 @@ export class ListResolver extends ListBaseResolver {
 
       // move target to bottom of list
       if (belowId === undefined) {
-        // get pos of last list
         targetList.pos = targetList.project.maxPos + buffer;
       }
 
@@ -212,13 +220,13 @@ export class ListResolver extends ListBaseResolver {
 
   @Query(() => [List])
   @UseMiddleware(isAuth)
-  async getProjectLists(@Arg('projectId', () => ID) projectId: string) {
+  async getProjectListsAndTasks(@Arg('projectId', () => ID) projectId: string) {
     try {
-      const lists = await createQueryBuilder(List, 'lists')
-        .where(`"projectId" = :id`, { id: projectId })
-        .orderBy('lists.pos', 'ASC')
+      const lists = await createQueryBuilder(List, 'list')
+        .where(`"list"."projectId" = :id`, { id: projectId })
+        .leftJoinAndSelect('list.tasks', 'task')
+        .orderBy('list.pos, task.pos', 'ASC')
         .getMany();
-
       return lists;
     } catch (err) {
       return err;
