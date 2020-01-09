@@ -39,6 +39,9 @@ export class List extends BaseEntity {
   @Column({ type: 'double precision' })
   pos: number;
 
+  @Column({ type: 'double precision', default: 0 })
+  maxPos: number;
+
   @CreateDateColumn()
   created_at: Date;
 
@@ -46,13 +49,20 @@ export class List extends BaseEntity {
   updated_at: Date;
 
   @Field(() => Project)
-  @ManyToOne(() => Project, project => project.lists, {
-    onDelete: 'CASCADE',
-    nullable: false
-  })
+  @ManyToOne(
+    () => Project,
+    project => project.lists,
+    {
+      onDelete: 'CASCADE',
+      nullable: false
+    }
+  )
   project: Project;
 
   @Field(() => [Task])
-  @OneToMany(() => Task, task => task.list)
+  @OneToMany(
+    () => Task,
+    task => task.list
+  )
   tasks: Task[];
 }

@@ -32,10 +32,10 @@ export class ProjectResolver {
           userId: payload!.userId
         })
         .where('project.id = :projectId', { projectId: id })
-        .innerJoinAndSelect('project.lists', 'list')
-        .orderBy({
-          'list.pos': 'ASC'
-        })
+        // .innerJoinAndSelect('project.lists', 'list')
+        // .orderBy({
+        //   'list.pos': 'ASC'
+        // })
         .getOne();
 
       if (!project) {
@@ -43,7 +43,6 @@ export class ProjectResolver {
           'This project doesn\'t exist or you don\'t have access to it'
         );
       }
-
       return project;
     } catch (err) {
       console.log(err);
