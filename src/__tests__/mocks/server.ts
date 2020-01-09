@@ -28,7 +28,8 @@ export const testServer = new ApolloServer({
         cookie: (_res: Response, payload: string) => payload
       }
     };
-  }
+  },
+  engine: false
 });
 
 export const createTestDbConnection = async () => {
