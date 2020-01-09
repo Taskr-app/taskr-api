@@ -13,6 +13,7 @@ import {
 } from 'type-graphql';
 import { List } from '../entity/List';
 import { Project } from '../entity/Project';
+import { createQueryBuilder } from 'typeorm';
 import { isAuth } from './middleware/isAuth';
 import { createQueryBuilder } from 'typeorm';
 
