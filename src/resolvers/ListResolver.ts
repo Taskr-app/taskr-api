@@ -15,7 +15,6 @@ import { List } from '../entity/List';
 import { Project } from '../entity/Project';
 import { createQueryBuilder } from 'typeorm';
 import { isAuth } from './middleware/isAuth';
-import { createQueryBuilder } from 'typeorm';
 
 const ListBaseResolver = createBaseResolver('List', List);
 const buffer = 16384;
