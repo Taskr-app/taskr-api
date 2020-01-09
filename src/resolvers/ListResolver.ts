@@ -13,6 +13,7 @@ import {
 } from 'type-graphql';
 import { List } from '../entity/List';
 import { Project } from '../entity/Project';
+import { createQueryBuilder } from 'typeorm';
 import { isAuth } from './middleware/isAuth';
 import { createQueryBuilder } from 'typeorm';
 
@@ -66,7 +67,7 @@ export class ListResolver extends ListBaseResolver {
         relations: ['project']
       });
       if (!list) {
-        throw new Error('Could not find List');
+        throw new Error(`Could not find List`);
       }
       await pubSub.publish(topics.delete, list);
       list.remove();

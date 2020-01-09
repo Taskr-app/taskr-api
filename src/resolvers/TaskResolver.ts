@@ -198,7 +198,7 @@ export class TaskResolver {
         where: { id: taskId },
         relations: ['list']
       });
-      if (!task) throw new Error(`This task doesn't exist`);
+      if (!task) throw new Error("This task doesn't exist");
       await publish(task);
       await task.remove();
       return true;
