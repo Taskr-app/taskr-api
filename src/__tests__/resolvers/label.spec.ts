@@ -1,22 +1,23 @@
 import { createTestClient } from "apollo-server-testing";
 import { gql } from "apollo-server-express";
 
-import { testServer, createTestDb, closeTestDb } from "../mocks/server";
-import { Connection } from "typeorm";
+import { testServer, createTestDbConnection, closeTestDb } from "../mocks/server";
 import faker from "faker";
 import { Label } from "../../entity/Label";
 import { Task } from "../../entity/Task";
+import { Connection } from "typeorm";
 
 const { query, mutate } = createTestClient(testServer);
 
 describe("Label Resolver", () => {
-  let connection: Connection;
+  let connection: Connection
   beforeAll(async () => {
-    connection = await createTestDb();
+    connection = await createTestDbConnection();
   });
-  afterAll(() => {
-    closeTestDb(connection);
-  });
+
+  afterAll(async () => {
+    await closeTestDb(connection)
+  })
 
   const mockLabel = {
     projectId: 1,

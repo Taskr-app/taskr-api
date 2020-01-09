@@ -1,25 +1,21 @@
-import { Connection } from 'typeorm';
 import { gql } from 'apollo-server-express';
 import faker from 'faker';
-import { createTestDb, closeTestDb, testServer } from '../mocks/server';
+import { testServer, createTestDbConnection, closeTestDb } from '../mocks/server';
 
 import { createTestClient } from 'apollo-server-testing';
 import { List } from '../../entity/List';
+import { Connection } from 'typeorm';
 const { mutate } = createTestClient(testServer);
 
 describe('List Resolver', () => {
-  let connection: Connection;
+  let connection: Connection
   beforeAll(async () => {
-    connection = await createTestDb();
+    connection = await createTestDbConnection();
   });
 
-  afterAll(() => {
-    closeTestDb(connection);
-  });
-
-  // createList
-  // updateListPos
-  // updateListName
+  afterAll(async () => {
+    await closeTestDb(connection)
+  })
 
   const mockList = {
     id: 1,

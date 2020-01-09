@@ -1,16 +1,16 @@
 import nodemailer from 'nodemailer';
 
 const transport =
-  process.env.NODE_ENV === "production"
+  process.env.NODE_ENV === 'production'
     ? {
-        service: "gmail",
+        service: 'gmail',
         auth: {
           user: process.env.MAILER_EMAIL,
           pass: process.env.MAILER_PASSWORD
         }
       }
     : {
-        host: "smtp.ethereal.email",
+        host: 'smtp.ethereal.email',
         port: 587,
         auth: {
           user: process.env.MAILER_EMAIL,

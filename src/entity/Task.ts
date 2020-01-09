@@ -1,9 +1,20 @@
-import { ObjectType, Field, ID } from "type-graphql";
-import { Entity, BaseEntity, PrimaryGeneratedColumn, Column, CreateDateColumn, UpdateDateColumn, ManyToOne, BeforeInsert, ManyToMany, JoinTable } from "typeorm";
-import { List } from "./List";
-import { Label } from "./Label";
-import { Project } from "./Project";
-import { User } from "./User";
+import { ObjectType, Field, ID } from 'type-graphql';
+import {
+  Entity,
+  BaseEntity,
+  PrimaryGeneratedColumn,
+  Column,
+  CreateDateColumn,
+  UpdateDateColumn,
+  ManyToOne,
+  BeforeInsert,
+  ManyToMany,
+  JoinTable
+} from 'typeorm';
+import { List } from './List';
+import { Label } from './Label';
+import { Project } from './Project';
+import { User } from './User';
 
 @ObjectType()
 @Entity('tasks')
@@ -12,13 +23,13 @@ export class Task extends BaseEntity {
   async generatePos() {
     const maxPosTask = await Task.findOne({
       order: {
-        id: "DESC"
+        id: 'DESC'
       },
       where: {
         list: this.list.id
       }
-    })
-    this.pos = maxPosTask ? maxPosTask.pos + 16384 : 16384
+    });
+    this.pos = maxPosTask ? maxPosTask.pos + 16384 : 16384;
   }
 
   @Field(() => ID)
@@ -48,27 +59,38 @@ export class Task extends BaseEntity {
   updated_at: Date;
 
   @Field(() => List)
-  @ManyToOne(() => List, list => list.tasks, {
-    cascade: ["insert", "update"],
-    onDelete: 'CASCADE',
-    nullable: false
-  })
-  list: List
+  @ManyToOne(
+    () => List,
+    list => list.tasks,
+    {
+      cascade: ['insert', 'update'],
+      onDelete: 'CASCADE',
+      nullable: false
+    }
+  )
+  list: List;
 
   @Field(() => Project)
   @ManyToOne(() => Project, {
     nullable: false
   })
-  project: Project
+  project: Project;
 
-  @ManyToMany(() => Label, label => label.tasks)
+  @ManyToMany(
+    () => Label,
+    label => label.tasks
+  )
   @JoinTable()
-  labels: Label[]
+  labels: Label[];
 
   @Field(() => [User])
-  @ManyToMany(() => User, user => user.tasks, {
-    eager: true
-  })
+  @ManyToMany(
+    () => User,
+    user => user.tasks,
+    {
+      eager: true
+    }
+  )
   @JoinTable()
-  users: User[]
+  users: User[];
 }

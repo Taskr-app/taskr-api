@@ -1,11 +1,14 @@
-import { fromEmail } from "./transporter"
-import { emailTemplate } from "./template"
+import { fromEmail } from './transporter';
+import { emailTemplate } from './template';
 
-export const forgotPasswordEmail = (email: string, forgotPasswordLink: string) => {
+export const forgotPasswordEmail = (
+  email: string,
+  forgotPasswordLink: string
+) => {
   return {
     from: fromEmail,
     to: email,
-    subject: "Forgot password | Taskr",
+    subject: 'Forgot password | Taskr',
     html: emailTemplate({
       header: 'Looks like you forgot your password',
       body: `You're receiving this email because you've requested
@@ -17,6 +20,5 @@ export const forgotPasswordEmail = (email: string, forgotPasswordLink: string) =
       link: `${process.env.CLIENT_URL}/forgot-password/success?email=${email}&id=${forgotPasswordLink}`,
       footer: 'This email will be invalid after 1 hour from being sent'
     })
-  }
-}
-
+  };
+};

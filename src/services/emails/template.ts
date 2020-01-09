@@ -997,7 +997,7 @@ export const emailTemplate = ({
 																			</a>
 																		</button>
 																	</div>`
-                                    : `<div></div>`
+                                    : '<div></div>'
                                 }
 
 																		

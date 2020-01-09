@@ -11,10 +11,19 @@ import {
   ManyToMany,
   JoinTable
 } from 'typeorm';
-import { ObjectType, Field, ID } from 'type-graphql';
+import { ObjectType, Field, ID, registerEnumType } from 'type-graphql';
 import { Project } from './Project';
 import { Team } from './Team';
 import { Task } from './Task';
+
+export enum UserAuthType {
+  WEBSITE = 'website',
+  GOOGLE = 'google'
+}
+registerEnumType(UserAuthType, {
+  name: 'UserAuthType',
+  description: 'User auth type for auth column (WEBSITE | GOOGLE)'
+});
 
 @ObjectType()
 @Entity('users')
@@ -34,17 +43,20 @@ export class User extends BaseEntity {
   @Column()
   username: string;
 
-  @Field()
+  @Field({ nullable: true })
   @Column({ nullable: true })
   avatar: string;
 
   @Column('int', { default: 0 })
   tokenVersion: number;
-  // TODO: make enum. 'website' | 'google'
 
-  @Field()
-  @Column({ default: 'website' })
-  auth: string;
+  @Field(() => UserAuthType)
+  @Column({
+    type: 'enum',
+    enum: UserAuthType,
+    default: UserAuthType.WEBSITE
+  })
+  auth: UserAuthType;
 
   @Field()
   @CreateDateColumn()
@@ -55,29 +67,46 @@ export class User extends BaseEntity {
   updated_at: Date;
 
   @Field(() => [Project])
-  @OneToMany(() => Project, project => project.owner, {
-    cascade: true,
-    eager: true
-  })
+  @OneToMany(
+    () => Project,
+    project => project.owner,
+    {
+      cascade: true,
+      eager: true
+    }
+  )
   ownedProjects: Project[];
 
   @Field(() => [Team])
-  @OneToMany(() => Team, team => team.owner, {
-    cascade: true,
-  })
-  ownedTeams: Team[]
+  @OneToMany(
+    () => Team,
+    team => team.owner,
+    {
+      cascade: true
+    }
+  )
+  ownedTeams: Team[];
 
   @Field(() => [Project])
-  @ManyToMany(() => Project, project => project.members)
+  @ManyToMany(
+    () => Project,
+    project => project.members
+  )
   @JoinTable()
   projects: Project[];
 
   @Field(() => [Team])
-  @ManyToMany(() => Team, team => team.members)
+  @ManyToMany(
+    () => Team,
+    team => team.members
+  )
   @JoinTable()
   teams: Team[];
 
   @Field(() => [Task])
-  @ManyToMany(() => Task, task => task.users)
-  tasks: Task[]
+  @ManyToMany(
+    () => Task,
+    task => task.users
+  )
+  tasks: Task[];
 }

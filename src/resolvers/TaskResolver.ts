@@ -9,8 +9,7 @@ import {
   Root,
   Publisher,
   Int,
-  Query,
-  PubSubEngine
+  Query
 } from 'type-graphql';
 import { Task } from '../entity/Task';
 import { List } from '../entity/List';
@@ -25,7 +24,7 @@ const topics = {
   delete: 'DELETE_TASK',
   addMember: 'ADD_TASK_MEMBER',
   removeMember: 'REMOVE_TASK_MEMBER',
-  move: 'MOVE_TASK'
+  move: 'TASK_MOVE'
 };
 
 const buffer = 16384;
@@ -40,7 +39,7 @@ export class TaskResolver {
         relations: ['tasks'],
         where: { id: listId }
       });
-      if (!list) throw new Error(`This list doesn't exist`);
+      if (!list) throw new Error("This list doesn't exist");
       return list.tasks;
     } catch (err) {
       console.log(err);
@@ -61,7 +60,7 @@ export class TaskResolver {
         relations: ['project'],
         where: { id: listId }
       });
-      if (!list) throw new Error(`This list doesn't exist`);
+      if (!list) throw new Error("This list doesn't exist");
       const task = await Task.create({
         name,
         desc,
@@ -88,10 +87,10 @@ export class TaskResolver {
   ) {
     try {
       const task = await Task.findOne({ where: { id } });
-      if (!task) throw new Error(`This task doesn't exist`);
+      if (!task) throw new Error("This task doesn't exist");
       if (listId) {
         const list = await List.findOne({ where: { id: listId } });
-        if (!list) throw new Error(`This list doesn't exist`);
+        if (!list) throw new Error("This list doesn't exist");
         task.list = list;
       }
       task.name = name ? name : task.name;
@@ -109,7 +108,7 @@ export class TaskResolver {
   @Mutation(() => Boolean)
   @UseMiddleware(isAuth)
   async updateTaskPos(
-    @PubSub() pubSub: PubSubEngine,
+    @PubSub(topics.move) publish: Publisher<Task>,
     @Arg('id', () => ID) id: string,
     @Arg('listId', () => ID, { nullable: true }) listId?: string,
     @Arg('aboveId', () => ID, { nullable: true }) aboveId?: string,
@@ -180,7 +179,7 @@ export class TaskResolver {
       // renumber the cards and nearby cards
 
       await targetTask.save();
-      await pubSub.publish(topics.move, targetTask);
+      await publish(targetTask);
       return true;
     } catch (err) {
       console.log(err);
@@ -218,9 +217,9 @@ export class TaskResolver {
   ) {
     try {
       const task = await Task.findOne({ where: { id } });
-      if (!task) throw new Error(`This task doesn't exist`);
+      if (!task) throw new Error("This task doesn't exist");
       const user = await User.findOne({ where: { id: userId } });
-      if (!user) throw new Error(`This user doesn't exist`);
+      if (!user) throw new Error("This user doesn't exist");
       task.users = uniqBy([...task.users, user], 'id');
       await publish(task);
       await task.save();
@@ -240,9 +239,9 @@ export class TaskResolver {
   ) {
     try {
       const task = await Task.findOne({ where: { id } });
-      if (!task) throw new Error(`This task doesn't exist`);
+      if (!task) throw new Error("This task doesn't exist");
       const user = await User.findOne({ where: { id: userId } });
-      if (!user) throw new Error(`This user doesn't exist`);
+      if (!user) throw new Error("This user doesn't exist");
       task.users = task.users.filter(user => user.id !== parseInt(userId));
       await publish(task);
       await task.save();

@@ -8,7 +8,7 @@ import {
   ID
 } from 'type-graphql';
 import { hash, compare } from 'bcryptjs';
-import { User } from '../entity/User';
+import { User, UserAuthType } from '../entity/User';
 import {
   createAccessToken,
   createRefreshToken
@@ -20,12 +20,14 @@ import { verificationEmail } from '../services/emails/verificationEmail';
 import { forgotPasswordEmail } from '../services/emails/forgotPassword';
 import { sendRefreshToken } from '../services/auth/sendRefreshToken';
 import { createOAuth2Client, verifyIdToken } from '../services/auth/google';
-import { cloudinary } from '../services/cloudinary';
 import { redis } from '../services/redis';
-import { ImageResponse } from './types/ImageResponse';
 import { v4 } from 'uuid';
 import { LoginResponse } from './types/LoginResponse';
 import { rateLimit, isAuth } from './middleware';
+import { GraphQLUpload } from 'graphql-upload';
+import { Upload } from './types/Upload';
+import { cloudinary } from '../services/cloudinary';
+import { newEmail } from '../services/emails/newEmail';
 
 @Resolver()
 export class UserResolver {
@@ -128,7 +130,7 @@ export class UserResolver {
         email,
         password: registerKey ? await hash(password, 12) : storedPassword,
         username,
-        auth: 'website'
+        auth: UserAuthType.WEBSITE
       }).save();
       if (!registerKey) {
         await redis.del(email);
@@ -161,7 +163,7 @@ export class UserResolver {
       // if user's password from db is NULL
       if (!user.password) {
         throw new Error(
-          `This account doesn't have a password set. Do you normally login with google?`
+          'This account doesn\'t have a password set. Do you normally login with google?'
         );
       }
 
@@ -200,7 +202,7 @@ export class UserResolver {
   ) {
     const client = await createOAuth2Client();
 
-    const scopes = ['openid', 'email'];
+    const scopes = ['openid', 'email', 'profile'];
 
     const url = client.generateAuthUrl({
       access_type: 'offline',
@@ -236,16 +238,17 @@ export class UserResolver {
 
       if (!user) {
         // register user to db if they don't exist in system
-        const username = payload.email!.split('@')[0];
-        user = await User.create({
+        user = User.create({
           email: payload.email,
-          username,
-          auth: 'google'
-        }).save();
-
-        if (!user) {
-          throw new Error('Failed to create user');
+          username: payload.name,
+          auth: UserAuthType.GOOGLE
+        });
+        if (payload.picture) {
+          let res = await cloudinary.uploader.upload(payload.picture);
+          user.avatar = res.public_id;
         }
+
+        await user.save();
       }
 
       if (!tokens.refresh_token) {
@@ -267,46 +270,35 @@ export class UserResolver {
     }
   }
 
-  @Mutation(() => ImageResponse)
-  @UseMiddleware(isAuth)
-  async createAvatar(
-    @Arg('image') image: string,
+  @Mutation(() => Boolean)
+  @UseMiddleware(isAuth, rateLimit(5))
+  async uploadAvatar(
+    @Arg('image', () => GraphQLUpload) image: Upload,
     @Ctx() { payload }: MyContext
   ) {
     try {
       const user = await User.findOne({ id: payload!.userId });
-      const res = await cloudinary.uploader.upload(image);
+      if (!user) throw new Error('This user doesn\'t exist');
+      if (user.avatar) {
+        await cloudinary.uploader.destroy(user.avatar);
+      }
+
+      const { createReadStream } = image;
+      const stream = createReadStream();
+      const imagePath = (stream as any).path;
+      if (!imagePath)
+        throw new Error('A path for the image could not be created');
+      const res = await cloudinary.uploader.upload(imagePath);
       user!.avatar = res.public_id;
       await user!.save();
-      return res;
+      return true;
     } catch (err) {
       console.log(err);
       return err;
     }
   }
 
-  @Mutation(() => ImageResponse)
-  @UseMiddleware(isAuth)
-  async updateAvatar(
-    @Arg('image') image: string,
-    @Ctx() { payload }: MyContext
-  ) {
-    try {
-      const user = await User.findOne({ id: payload!.userId });
-      // destroy current user's avatar from storage
-      await cloudinary.uploader.destroy(user!.avatar);
-
-      const res = await cloudinary.uploader.upload(image);
-      user!.avatar = res.public_id;
-      await user!.save();
-      return res;
-    } catch (err) {
-      console.log(err);
-      return err;
-    }
-  }
-
-  @Mutation(() => User)
+  @Mutation(() => Boolean)
   @UseMiddleware(isAuth)
   async updateUsername(
     @Arg('username') username: string,
@@ -314,9 +306,70 @@ export class UserResolver {
   ) {
     try {
       const user = await User.findOne({ id: payload!.userId });
-      user!.username = username;
-      const newUser = await user!.save();
-      return newUser;
+      if (!user) throw new Error('User not found');
+      user.username = username;
+      await user!.save();
+      return true;
+    } catch (err) {
+      console.log(err);
+      return err;
+    }
+  }
+
+  @Mutation(() => Boolean)
+  @UseMiddleware(isAuth, rateLimit(10))
+  async sendNewEmailLink(
+    @Arg('email') email: string,
+    @Ctx() { payload }: MyContext
+  ) {
+    try {
+      const user = await User.findOne({ id: payload!.userId });
+      if (!user) throw new Error('User not found');
+      const existingUserEmail = await User.findOne({ email });
+      if (existingUserEmail) {
+        throw new Error('Sorry, this email already exists');
+      }
+
+      const verificationLink = v4();
+      await redis.hmset(`new-email-${email}`, {
+        email: user.email,
+        link: verificationLink
+      });
+      transporter.sendMail(newEmail(email, verificationLink, user.email));
+      return true;
+    } catch (err) {
+      console.log(err);
+      return err;
+    }
+  }
+
+  @Mutation(() => Boolean)
+  @UseMiddleware(isAuth, rateLimit(10))
+  async updateEmail(
+    @Arg('email') email: string,
+    @Arg('password', { nullable: true }) password: string,
+    @Arg('verificationLink') verificationLink: string
+  ) {
+    try {
+      const { link: storedLink, email: storedEmail } = await redis.hgetall(
+        `new-email-${email}`
+      );
+      if (storedLink !== verificationLink)
+        throw new Error('This link has expired');
+      const user = await User.findOne({ email: storedEmail });
+      if (!user)
+        throw new Error(
+          'The user email you have requested the email change no longer exists'
+        );
+
+      if (user.auth === UserAuthType.GOOGLE && password) {
+        user.password = await hash(password, 12);
+      }
+      user.email = email;
+      user.auth = UserAuthType.WEBSITE;
+      await user.save();
+      await redis.del(`new-email-${email}`);
+      return true;
     } catch (err) {
       console.log(err);
       return err;
@@ -364,7 +417,7 @@ export class UserResolver {
         throw new Error('This link has expired');
       }
       const user = await User.findOne({ email });
-      if (!user) throw new Error("This user doesn't exist");
+      if (!user) throw new Error('This user doesn\'t exist');
       const hashedPassword = await hash(password, 12);
       user.password = hashedPassword;
       await user.save();
@@ -389,7 +442,7 @@ export class UserResolver {
       // if user's password from db is NULL
       if (!user.password) {
         throw new Error(
-          `This account doesn't have a password set. Do you normally login with google?`
+          'This account doesn\'t have a password set. Do you normally login with google?'
         );
       }
 
