@@ -96,9 +96,7 @@ export class TeamResolver extends TeamBaseResolver {
       if (!team) throw new Error('This team doesn\'t exist');
 
       const link = v4();
-      await redis.hmset(`team-invite-${email}`, { id: teamId, link });
-      await redis.expire(`team-invite-${email}`, 3600);
-      transporter.sendMail(
+      await transporter.sendMail(
         teamInviteEmail({
           sender: me!.username,
           email,
@@ -106,6 +104,8 @@ export class TeamResolver extends TeamBaseResolver {
           link
         })
       );
+      await redis.hmset(`team-invite-${email}`, { id: teamId, link });
+      await redis.expire(`team-invite-${email}`, 3600);
       return link;
     } catch (err) {
       console.log(err);

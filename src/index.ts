@@ -7,8 +7,6 @@ import cookieParser from 'cookie-parser';
 import { refreshAccessToken } from './services/auth/refreshAccessToken';
 import { server } from './services/server';
 import { createServer } from 'http';
-import chokidar from 'chokidar';
-import { eventColors } from './services/eventColors';
 
 const PORT = process.env.PORT || 4000;
 
@@ -20,17 +18,6 @@ const startServer = async () => {
       credentials: true
     })
   );
-
-  if (process.env.NODE_ENV === 'development') {
-    chokidar
-      .watch('./', {
-        ignored: /(^|[\/\\])\../,
-        ignoreInitial: true
-      })
-      .on('all', (event, path) => {
-        console.log(eventColors(event), `${event} - ${path}`);
-      });
-  }
 
   app.get('/', (_req, res) => res.send('taskr-api'));
   app.post('/refresh_token', cookieParser(), refreshAccessToken);

@@ -63,6 +63,7 @@ export class UserResolver {
       }
 
       const verificationLink = v4();
+      await transporter.sendMail(verificationEmail(email, verificationLink));
       const hashedPassword = await hash(password, 12);
 
       await redis.hmset(email, {
@@ -71,7 +72,6 @@ export class UserResolver {
       });
       await redis.expire(email, 3600);
 
-      transporter.sendMail(verificationEmail(email, verificationLink));
       return verificationLink;
     } catch (err) {
       console.log(err);
@@ -97,7 +97,7 @@ export class UserResolver {
       });
       await redis.expire(email, 3600);
 
-      transporter.sendMail(verificationEmail(email, newVerificationLink));
+      await transporter.sendMail(verificationEmail(email, newVerificationLink));
       return newVerificationLink;
     } catch (err) {
       console.log(err);
@@ -331,11 +331,11 @@ export class UserResolver {
       }
 
       const verificationLink = v4();
+      await transporter.sendMail(newEmail(email, verificationLink, user.email));
       await redis.hmset(`new-email-${email}`, {
         email: user.email,
         link: verificationLink
       });
-      transporter.sendMail(newEmail(email, verificationLink, user.email));
       return true;
     } catch (err) {
       console.log(err);
@@ -393,10 +393,10 @@ export class UserResolver {
 
       user.tokenVersion++;
       await user.save();
-
+      
       const forgotPasswordLink = v4();
+      await transporter.sendMail(forgotPasswordEmail(email, forgotPasswordLink));
       await redis.set(`forgot-${email}`, forgotPasswordLink, 'EX', 3600);
-      transporter.sendMail(forgotPasswordEmail(email, forgotPasswordLink));
       return forgotPasswordLink;
     } catch (err) {
       console.log(err);
