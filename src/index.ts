@@ -21,14 +21,16 @@ const startServer = async () => {
     })
   );
 
-  chokidar
-    .watch('./', {
-      ignored: /(^|[\/\\])\../,
-      ignoreInitial: true
-    })
-    .on('all', (event, path) => {
-      console.log(eventColors(event), `${event} - ${path}`)
-    })
+  if (process.env.NODE_ENV === 'development') {
+    chokidar
+      .watch('./', {
+        ignored: /(^|[\/\\])\../,
+        ignoreInitial: true
+      })
+      .on('all', (event, path) => {
+        console.log(eventColors(event), `${event} - ${path}`);
+      });
+  }
 
   app.get('/', (_req, res) => res.send('taskr-api'));
   app.post('/refresh_token', cookieParser(), refreshAccessToken);
