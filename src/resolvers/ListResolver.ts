@@ -36,14 +36,14 @@ export class ListResolver extends ListBaseResolver {
     @PubSub() pubSub: PubSubEngine
   ) {
     const project = await Project.findOne({ where: { id: projectId } });
-
     if (!project) {
       throw new Error('Project does not exist');
     }
 
     const list = await List.create({
       name,
-      project
+      project,
+      tasks: []
     }).save();
     await pubSub.publish(topics.create, list);
     return list;
