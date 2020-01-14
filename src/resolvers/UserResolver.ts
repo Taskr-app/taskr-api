@@ -14,7 +14,7 @@ import {
   createRefreshToken
 } from '../services/auth/createTokens';
 import { MyContext } from '../services/context';
-import { getConnection } from 'typeorm';
+import { getConnection, Like } from 'typeorm';
 import { transporter } from '../services/emails/transporter';
 import { verificationEmail } from '../services/emails/verificationEmail';
 import { forgotPasswordEmail } from '../services/emails/forgotPassword';
@@ -40,6 +40,27 @@ export class UserResolver {
     } catch (err) {
       console.log(err);
       return null;
+    }
+  }
+
+  @Query(() => [User])
+  @UseMiddleware(isAuth)
+  async getUsersByEmail(
+    @Arg('search') search: string
+  ) {
+    try {
+      const users = await User.find({
+        where: {
+          email: Like(`%${search}%`)
+        },
+        take: 6
+      })
+
+      if (!users) throw new Error('No users found')
+      return users
+    } catch (err) {
+      console.error(err);
+      return err;
     }
   }
 
