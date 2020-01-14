@@ -3,7 +3,8 @@ interface emailTemplateArgs {
   body: string;
   cta?: string;
   link?: string;
-  footer?: string;
+	footer?: string;
+	message?: string
 }
 
 export const emailTemplate = ({
@@ -11,7 +12,8 @@ export const emailTemplate = ({
   body,
   cta,
   link,
-  footer
+	footer,
+	message
 }: emailTemplateArgs) => `
 <!doctype html>
 <html xmlns="http://www.w3.org/1999/xhtml"
@@ -985,7 +987,7 @@ export const emailTemplate = ({
 																style="padding-top:0; padding-right:18px; padding-bottom:9px; padding-left:18px;">
 
 																<h1>${header}</h1>
-
+																<p>${message}</p>
                                 <p>${body}</p>
 																
 																${

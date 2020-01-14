@@ -144,33 +144,40 @@ export class ProjectResolver {
     }
   }
 
-  @Mutation(() => String)
+  @Mutation(() => Boolean)
   @UseMiddleware(isAuth, rateLimit(10))
   async sendProjectInviteLink(
     @Arg('projectId', () => ID) projectId: string,
-    @Arg('email') email: string,
-    @Ctx() { payload }: MyContext
+    @Arg('emails', () => [String]) emails: [string],
+    @Ctx() { payload }: MyContext,
+    @Arg('message', { nullable: true }) message?: string
   ) {
     try {
       const me = await User.findOne({ where: { id: payload!.userId } });
       const project = await Project.findOne({ where: { id: projectId } });
       if (!project) throw new Error('Project doesn\'t exist');
 
-      const invitationLink = v4();
-      await transporter.sendMail(
-        projectInviteEmail({
-          sender: me!.username,
-          email,
-          projectName: project.name,
+      emails.forEach(async email => {
+        if (email === me!.email) {
+          return;
+        }
+        const invitationLink = v4();
+        await transporter.sendMail(
+          projectInviteEmail({
+            sender: me!.username,
+            email,
+            message,
+            projectName: project.name,
+            link: invitationLink
+          })
+        );
+        await redis.hmset(`project-invite-${email}`, {
+          id: projectId,
           link: invitationLink
-        })
-      );
-      await redis.hmset(`project-invite-${email}`, {
-        id: projectId,
-        link: invitationLink
+        });
+        await redis.expire(`project-invite-${email}`, 3600);
       });
-      await redis.expire(`project-invite-${email}`, 3600);
-      return invitationLink;
+      return true;
     } catch (err) {
       console.log(err);
       return err;
