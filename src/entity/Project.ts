@@ -42,28 +42,46 @@ export class Project extends BaseEntity {
   updated_at: Date;
 
   @Field(() => User)
-  @ManyToOne(() => User, user => user.ownedProjects, {
-    onDelete: 'CASCADE'
-  })
+  @ManyToOne(
+    () => User,
+    user => user.ownedProjects,
+    {
+      onDelete: 'CASCADE'
+    }
+  )
   owner: User;
 
   @Field(() => [List])
-  @OneToMany(() => List, list => list.project, {
-    cascade: true,
-    eager: true
-  })
+  @OneToMany(
+    () => List,
+    list => list.project,
+    {
+      cascade: true,
+      eager: true
+    }
+  )
   lists: List[];
 
   @Field(() => [User])
-  @ManyToMany(() => User, user => user.projects)
+  @ManyToMany(
+    () => User,
+    user => user.projects
+  )
   members: User[];
 
   @Field(() => Team)
-  @ManyToOne(() => Team, team => team.projects, {
-    onDelete: "SET NULL"
-  })
+  @ManyToOne(
+    () => Team,
+    team => team.projects,
+    {
+      onDelete: 'SET NULL'
+    }
+  )
   team: Team | null;
 
-  @OneToMany(() => Label, label => label.project)
-  labels: Label[]
+  @OneToMany(
+    () => Label,
+    label => label.project
+  )
+  labels: Label[];
 }

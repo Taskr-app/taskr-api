@@ -17,6 +17,7 @@ import { transporter } from '../services/emails/transporter';
 import { Team } from '../entity/Team';
 import { generateProjectLink } from '../services/links';
 import { isAuth, isOwner, rateLimit } from './middleware';
+import { redisKeys } from '../services/redis/keys';
 
 @Resolver()
 export class ProjectResolver {
@@ -32,6 +33,8 @@ export class ProjectResolver {
           userId: payload!.userId
         })
         .where('project.id = :projectId', { projectId: id })
+        .innerJoinAndSelect('project.members', 'member')
+        .innerJoinAndSelect('project.owner', 'owner')
         // .innerJoinAndSelect('project.lists', 'list')
         // .orderBy({
         //   'list.pos': 'ASC'
@@ -63,6 +66,19 @@ export class ProjectResolver {
         .getMany();
 
       return projects;
+    } catch (err) {
+      console.log(err);
+      return err;
+    }
+  }
+
+  @Query(() => [String])
+  @UseMiddleware(isAuth)
+  async getProjectInvitees(
+    @Arg('id', () => ID) id: number
+  ) {
+    try {
+
     } catch (err) {
       console.log(err);
       return err;
@@ -171,11 +187,12 @@ export class ProjectResolver {
             link: invitationLink
           })
         );
-        await redis.hmset(`project-invite-${email}`, {
+        await redis.hmset(redisKeys.projectInvite(email), {
           id: projectId,
           link: invitationLink
         });
-        await redis.expire(`project-invite-${email}`, 3600);
+        await redis.sadd()
+        await redis.expire(redisKeys.projectInvite(email), 3600);
       });
       return true;
     } catch (err) {
@@ -193,7 +210,7 @@ export class ProjectResolver {
   ) {
     try {
       const { link: storedLink, id: projectId } = await redis.hgetall(
-        `project-invite-${email}`
+        redisKeys.projectInvite(email)
       );
       if (storedLink !== projectInviteLink) {
         throw new Error('This link has expired');
@@ -208,7 +225,7 @@ export class ProjectResolver {
       if (!project) throw new Error('This project doesn\'t exist');
       project.members = [...project.members, user];
       await project.save();
-      await redis.del(`project-invite-${email}`);
+      await redis.del(redisKeys.projectInvite(email));
       return true;
     } catch (err) {
       console.log(err);

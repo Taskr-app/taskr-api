@@ -19,6 +19,7 @@ import { teamInviteEmail } from '../services/emails/teamInviteEmail';
 import { Project } from '../entity/Project';
 import { isAuth, rateLimit, isOwner } from './middleware';
 import { uniqBy } from 'lodash';
+import { redisKeys } from '../services/redis/keys';
 
 const TeamBaseResolver = createBaseResolver('Team', Team);
 
@@ -104,8 +105,8 @@ export class TeamResolver extends TeamBaseResolver {
           link
         })
       );
-      await redis.hmset(`team-invite-${email}`, { id: teamId, link });
-      await redis.expire(`team-invite-${email}`, 3600);
+      await redis.hmset(redisKeys.teamInvite(email), { id: teamId, link });
+      await redis.expire(redisKeys.teamInvite(email), 3600);
       return link;
     } catch (err) {
       console.log(err);
@@ -122,7 +123,7 @@ export class TeamResolver extends TeamBaseResolver {
   ) {
     try {
       const { link: storedLink, id: teamId } = await redis.hgetall(
-        `team-invite-${email}`
+        redisKeys.teamInvite(email)
       );
       if (storedLink !== teamInviteLink) {
         throw new Error('This link has expired');
@@ -134,7 +135,7 @@ export class TeamResolver extends TeamBaseResolver {
       if (!team) throw new Error('This team doesn\'t exist');
       team.members = uniqBy([...team.members, user], 'id');
       await team.save();
-      await redis.del(`team-invite-${email}`);
+      await redis.del(redisKeys.teamInvite(email));
       return true;
     } catch (err) {
       console.log(err);
