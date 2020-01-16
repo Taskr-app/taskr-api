@@ -19,7 +19,7 @@ import { teamInviteEmail } from '../services/emails/teamInviteEmail';
 import { Project } from '../entity/Project';
 import { isAuth, rateLimit, isOwner } from './middleware';
 import { uniqBy } from 'lodash';
-import { redisKeys } from '../services/redis/keys';
+import { redisKeys, redisExpirationDuration } from '../services/redis/keys';
 
 const TeamBaseResolver = createBaseResolver('Team', Team);
 
@@ -106,7 +106,7 @@ export class TeamResolver extends TeamBaseResolver {
         })
       );
       await redis.hmset(redisKeys.teamInvite(email), { id: teamId, link });
-      await redis.expire(redisKeys.teamInvite(email), 3600);
+      await redis.expire(redisKeys.teamInvite(email), redisExpirationDuration);
       return link;
     } catch (err) {
       console.log(err);

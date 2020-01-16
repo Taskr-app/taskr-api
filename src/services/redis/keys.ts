@@ -7,3 +7,5 @@ export const redisKeys = {
   userNotifications: (userId: string | number) => `user-notifications-${userId}`,
   notifications: (notificationId: string | number) => `notifications-${notificationId}`,
 }
+
+export const redisExpirationDuration = 7200

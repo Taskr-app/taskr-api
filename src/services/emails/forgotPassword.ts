@@ -18,7 +18,7 @@ export const forgotPasswordEmail = (
       the link we will redirect you to change your password.`,
       cta: 'Change password',
       link: `${process.env.CLIENT_URL}/forgot-password/success?email=${email}&id=${forgotPasswordLink}`,
-      footer: 'This email will be invalid after 1 hour from being sent'
+      footer: 'This email will be invalid after 2 hours from being sent'
     })
   };
 };
