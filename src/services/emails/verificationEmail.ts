@@ -11,7 +11,7 @@ export const verificationEmail = (email: string, verificationLink: string) => {
       body: 'We\'re happy you\'ve signed up for Taskr to help develop your projects. You can get started right away by creating a new project and inviting other people.',
       cta: 'Validate account',
       link: `${process.env.CLIENT_URL}/email-verification/success?email=${email}&id=${verificationLink}`,
-      footer: 'This email will be invalid after 1 hour from being sent'
+      footer: 'This email will be invalid after 2 hours from being sent'
     })
   };
 };

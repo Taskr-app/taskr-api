@@ -17,7 +17,7 @@ import { transporter } from '../services/emails/transporter';
 import { Team } from '../entity/Team';
 import { generateProjectLink } from '../services/links';
 import { isAuth, isOwner, rateLimit } from './middleware';
-import { redisKeys } from '../services/redis/keys';
+import { redisKeys, redisExpirationDuration } from '../services/redis/keys';
 
 @Resolver()
 export class ProjectResolver {
@@ -191,8 +191,8 @@ export class ProjectResolver {
           id: projectId,
           link: invitationLink
         });
-        await redis.sadd()
-        await redis.expire(redisKeys.projectInvite(email), 3600);
+        await redis.sadd(redisKeys.projectInvites(projectId), email)
+        await redis.expire(redisKeys.projectInvite(email), redisExpirationDuration);
       });
       return true;
     } catch (err) {
@@ -226,6 +226,7 @@ export class ProjectResolver {
       project.members = [...project.members, user];
       await project.save();
       await redis.del(redisKeys.projectInvite(email));
+      await redis.srem(redisKeys.projectInvites(projectId), email)
       return true;
     } catch (err) {
       console.log(err);

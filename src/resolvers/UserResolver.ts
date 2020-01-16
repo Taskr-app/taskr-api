@@ -28,7 +28,7 @@ import { GraphQLUpload } from 'graphql-upload';
 import { Upload } from './types/Upload';
 import { cloudinary } from '../services/cloudinary';
 import { newEmail } from '../services/emails/newEmail';
-import { redisKeys } from '../services/redis/keys';
+import { redisKeys, redisExpirationDuration } from '../services/redis/keys';
 
 @Resolver()
 export class UserResolver {
@@ -92,7 +92,7 @@ export class UserResolver {
         password: hashedPassword,
         link: verificationLink
       });
-      await redis.expire(email, 3600);
+      await redis.expire(email, redisExpirationDuration);
 
       return verificationLink;
     } catch (err) {
@@ -117,7 +117,7 @@ export class UserResolver {
         password,
         link: newVerificationLink
       });
-      await redis.expire(email, 3600);
+      await redis.expire(email, redisExpirationDuration);
 
       await transporter.sendMail(verificationEmail(email, newVerificationLink));
       return newVerificationLink;
@@ -418,7 +418,7 @@ export class UserResolver {
       
       const forgotPasswordLink = v4();
       await transporter.sendMail(forgotPasswordEmail(email, forgotPasswordLink));
-      await redis.set(redisKeys.forgotEmail(email), forgotPasswordLink, 'EX', 3600);
+      await redis.set(redisKeys.forgotEmail(email), forgotPasswordLink, 'EX', redisExpirationDuration);
       return forgotPasswordLink;
     } catch (err) {
       console.log(err);

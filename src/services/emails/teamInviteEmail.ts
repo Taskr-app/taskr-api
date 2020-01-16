@@ -23,7 +23,7 @@ export const teamInviteEmail = ({
       body: `You've been invited as a team member to ${teamName}. All team projects will be shared across team members.`,
       cta: 'Accept team invitation',
       link: `${process.env.CLIENT_URL}/invite/team/success?email=${email}&id=${link}`,
-      footer: 'This email will be invalid after 1 hour from being sent'
+      footer: 'This email will be invalid after 2 hours from being sent'
     })
   };
 };
