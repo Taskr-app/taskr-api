@@ -28,6 +28,7 @@ import { GraphQLUpload } from 'graphql-upload';
 import { Upload } from './types/Upload';
 import { cloudinary } from '../services/cloudinary';
 import { newEmail } from '../services/emails/newEmail';
+import { redisKeys } from '../services/redis/keys';
 
 @Resolver()
 export class UserResolver {
@@ -353,7 +354,7 @@ export class UserResolver {
 
       const verificationLink = v4();
       await transporter.sendMail(newEmail(email, verificationLink, user.email));
-      await redis.hmset(`new-email-${email}`, {
+      await redis.hmset(redisKeys.newEmail(email), {
         email: user.email,
         link: verificationLink
       });
@@ -373,7 +374,7 @@ export class UserResolver {
   ) {
     try {
       const { link: storedLink, email: storedEmail } = await redis.hgetall(
-        `new-email-${email}`
+        redisKeys.newEmail(email)
       );
       if (storedLink !== verificationLink)
         throw new Error('This link has expired');
@@ -389,7 +390,7 @@ export class UserResolver {
       user.email = email;
       user.auth = UserAuthType.WEBSITE;
       await user.save();
-      await redis.del(`new-email-${email}`);
+      await redis.del(redisKeys.newEmail(email));
       return true;
     } catch (err) {
       console.log(err);
@@ -417,7 +418,7 @@ export class UserResolver {
       
       const forgotPasswordLink = v4();
       await transporter.sendMail(forgotPasswordEmail(email, forgotPasswordLink));
-      await redis.set(`forgot-${email}`, forgotPasswordLink, 'EX', 3600);
+      await redis.set(redisKeys.forgotEmail(email), forgotPasswordLink, 'EX', 3600);
       return forgotPasswordLink;
     } catch (err) {
       console.log(err);
@@ -433,7 +434,7 @@ export class UserResolver {
     @Arg('password') password: string
   ) {
     try {
-      const storedLink = await redis.get(`forgot-${email}`);
+      const storedLink = await redis.get(redisKeys.forgotEmail(email));
       if (storedLink !== forgotPasswordLink) {
         throw new Error('This link has expired');
       }
@@ -442,7 +443,7 @@ export class UserResolver {
       const hashedPassword = await hash(password, 12);
       user.password = hashedPassword;
       await user.save();
-      await redis.del(`forgot-${email}`);
+      await redis.del(redisKeys.forgotEmail(email));
       return true;
     } catch (err) {
       console.log(err);

@@ -10,6 +10,7 @@ import faker from 'faker';
 import { createTestClient } from 'apollo-server-testing';
 import { Connection } from 'typeorm';
 import { redis } from '../../services/redis';
+import { redisKeys } from '../../services/redis/keys';
 const { query, mutate } = createTestClient(testServer);
 
 describe('User Resolver', () => {
@@ -114,7 +115,7 @@ describe('User Resolver', () => {
   });
 
   describe('ForgotPassword mutation', () => {
-    it("should send a link to user's email and then update the user's password", async () => {
+    it('should send a link to user\'s email and then update the user\'s password', async () => {
       jest.setTimeout(50000);
       const res = await mutate({
         mutation: gql`
@@ -182,7 +183,7 @@ describe('User Resolver', () => {
   });
 
   describe('Change password mutation', () => {
-    it("should change the user's password", async () => {
+    it('should change the user\'s password', async () => {
       const res = await mutate({
         mutation: gql`
           mutation ChangePassword(
@@ -217,7 +218,7 @@ describe('User Resolver', () => {
   });
 
   describe('Update username mutation', () => {
-    it("should change the user's username", async () => {
+    it('should change the user\'s username', async () => {
       const res = await mutate({
         mutation: gql`
           mutation UpdateUsername($username: String!) {
@@ -233,7 +234,7 @@ describe('User Resolver', () => {
   });
 
   describe('SendNewEmailLink and updateEmail mutations', () => {
-    it("should send a new-email link and update the user's email", async () => {
+    it('should send a new-email link and update the user\'s email', async () => {
       const { data, errors } = await mutate({
         mutation: gql`
           mutation SendNewEmailLink($email: String!) {
@@ -247,14 +248,22 @@ describe('User Resolver', () => {
       expect(errors).toBeUndefined();
 
       const { link } = await redis.hgetall(
-        `new-email-${mockUser.newEmail}`
+        redisKeys.newEmail(mockUser.newEmail)
       );
       expect(link).toBeDefined();
 
       const res = await mutate({
         mutation: gql`
-          mutation UpdateEmail($email: String!, $verificationLink: String!, $password: String) {
-            updateEmail(email:$email, verificationLink:$verificationLink, password:$password)
+          mutation UpdateEmail(
+            $email: String!
+            $verificationLink: String!
+            $password: String
+          ) {
+            updateEmail(
+              email: $email
+              verificationLink: $verificationLink
+              password: $password
+            )
           }
         `,
         variables: {
