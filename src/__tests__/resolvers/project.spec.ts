@@ -1,28 +1,35 @@
 import { createTestClient } from 'apollo-server-testing';
 import { gql } from 'apollo-server-express';
 
-import { testServer, createTestDbConnection, closeTestDb } from '../mocks/server';
+import {
+  testServer,
+  createTestDbConnection,
+  closeTestDb
+} from '../mocks/server';
 import faker from 'faker';
 import { Project } from '../../entity/Project';
 import { GraphQLResponse } from 'graphql-extensions';
 import { Connection } from 'typeorm';
+import { redis } from '../../services/redis';
+import { redisSeparator } from '../../services/redis/keys';
 
 const { query, mutate } = createTestClient(testServer);
 
 describe('Project Resolver', () => {
-  let connection: Connection
+  let connection: Connection;
   beforeAll(async () => {
     connection = await createTestDbConnection();
   });
 
   afterAll(async () => {
-    await closeTestDb(connection)
-  })
+    await closeTestDb(connection);
+  });
 
   const mockProject = {
     name: faker.commerce.productName(),
     desc: faker.lorem.sentence(),
-    email: faker.internet.email()
+    email: faker.internet.email(),
+    projectId: 1
   };
 
   describe('CRUD project', () => {
@@ -132,42 +139,74 @@ describe('Project Resolver', () => {
   });
 
   describe('SendProjectInviteLink and AcceptProjectInviteLink mutation', () => {
-    it('should send a project invite link to an email address and add the user to a project', async () => {
+    it('should send a project invite link to an email address and fail to accept it', async () => {
       const projectLink = await mutate({
         mutation: gql`
-          mutation SendProjectInviteLink($projectId: ID!, $email: String!) {
-            sendProjectInviteLink(projectId: $projectId, email: $email)
+          mutation SendProjectInviteLink($projectId: ID!, $emails: [String!]!) {
+            sendProjectInviteLink(projectId: $projectId, emails: $emails)
           }
         `,
         variables: {
-          projectId: 1,
-          email: mockProject.email
+          projectId: mockProject.projectId,
+          emails: [mockProject.email]
         }
       });
 
       expect(projectLink.data).toBeDefined();
       expect(projectLink.errors).toBeUndefined();
 
+      const { data, errors } = await query({
+        query: gql`
+          query GetProjectInvites($projectId: ID!) {
+            getProjectInvites(projectId: $projectId) {
+              email
+              avatar
+            }
+          }
+        `,
+        variables: {
+          projectId: mockProject.projectId
+        }
+      });
+
+      expect(data).toBeDefined();
+      expect(errors).toBeUndefined();
+      expect(data!.getProjectInvites.length).toEqual(1);
+      expect(data!.getProjectInvites[0].email).toEqual(mockProject.email);
+
+      const [, [storedKey]] = await redis.zscan(
+        `project-invites-${mockProject.projectId}`,
+        0,
+        'MATCH',
+        `${mockProject.email}*`
+      );
+      const link = await storedKey.split(redisSeparator.project)[1];
+
       const res = await mutate({
         mutation: gql`
           mutation AcceptProjectInviteLink(
             $email: String!
+            $id: ID!
             $projectInviteLink: String!
           ) {
             acceptProjectInviteLink(
               email: $email
+              id: $id
               projectInviteLink: $projectInviteLink
             )
           }
         `,
         variables: {
+          id: mockProject.projectId,
           email: mockProject.email,
-          projectInviteLink: projectLink.data!.sendProjectInviteLink
+          projectInviteLink: link
         }
       });
 
-      expect(res.data).toBeDefined();
-      expect(res.errors).toBeUndefined();
+      expect(res.errors).toBeDefined();
+      expect(res.errors![0].message).toBe(
+        'You don\'t have access to accept this invitation'
+      );
     });
   });
 
