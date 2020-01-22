@@ -11,13 +11,15 @@ import { Project } from '../entity/Project';
 import { MyContext } from '../services/context';
 import { User } from '../entity/User';
 import { v4 } from 'uuid';
-import { redis } from '../services/redis';
 import { projectInviteEmail } from '../services/emails/projectInviteEmail';
 import { transporter } from '../services/emails/transporter';
 import { Team } from '../entity/Team';
 import { generateProjectLink } from '../services/links';
 import { isAuth, isOwner, rateLimit } from './middleware';
-import { redisKeys, redisExpirationDuration } from '../services/redis/keys';
+import { redisProjects } from '../services/redis/projects';
+import { validateProjectInvitationLink } from './middleware/validateLink';
+import { redisSeparator } from '../services/redis/keys';
+import { InvitedUserResponse } from './types/InvitedUserResponse';
 
 @Resolver()
 export class ProjectResolver {
@@ -66,19 +68,6 @@ export class ProjectResolver {
         .getMany();
 
       return projects;
-    } catch (err) {
-      console.log(err);
-      return err;
-    }
-  }
-
-  @Query(() => [String])
-  @UseMiddleware(isAuth)
-  async getProjectInvitees(
-    @Arg('id', () => ID) id: number
-  ) {
-    try {
-
     } catch (err) {
       console.log(err);
       return err;
@@ -173,27 +162,26 @@ export class ProjectResolver {
       const project = await Project.findOne({ where: { id: projectId } });
       if (!project) throw new Error('Project doesn\'t exist');
 
-      emails.forEach(async email => {
+      await Promise.all(emails.map(async email => {
         if (email === me!.email) {
           return;
         }
-        const invitationLink = v4();
+        const link = v4();
         await transporter.sendMail(
           projectInviteEmail({
             sender: me!.username,
             email,
             message,
-            projectName: project.name,
-            link: invitationLink
+            project,
+            link: link
           })
         );
-        await redis.hmset(redisKeys.projectInvite(email), {
+        await redisProjects.add({
           id: projectId,
-          link: invitationLink
-        });
-        await redis.sadd(redisKeys.projectInvites(projectId), email)
-        await redis.expire(redisKeys.projectInvite(email), redisExpirationDuration);
-      });
+          link,
+          email
+        })
+      }))
       return true;
     } catch (err) {
       console.log(err);
@@ -202,34 +190,53 @@ export class ProjectResolver {
   }
 
   @Mutation(() => Boolean)
-  @UseMiddleware(isAuth)
+  @UseMiddleware(validateProjectInvitationLink, isAuth)
   async acceptProjectInviteLink(
     @Arg('email') email: string,
+    @Arg('id', () => ID) id: number,
     @Arg('projectInviteLink') projectInviteLink: string,
     @Ctx() { payload }: MyContext
   ) {
     try {
-      const { link: storedLink, id: projectId } = await redis.hgetall(
-        redisKeys.projectInvite(email)
-      );
-      if (storedLink !== projectInviteLink) {
-        throw new Error('This link has expired');
-      }
-
       const user = await User.findOne({ id: payload!.userId });
       if (!user) throw new Error('This user doesn\'t exist');
+      if (user.email !== email) throw new Error('You don\'t have access to accept this invitation')
       const project = await Project.findOne({
         relations: ['members'],
-        where: { id: projectId }
+        where: { id }
       });
       if (!project) throw new Error('This project doesn\'t exist');
       project.members = [...project.members, user];
       await project.save();
-      await redis.del(redisKeys.projectInvite(email));
-      await redis.srem(redisKeys.projectInvites(projectId), email)
+      await redisProjects.delete({ email, id, link: projectInviteLink })
       return true;
     } catch (err) {
       console.log(err);
+      return err;
+    }
+  }
+
+  @Query(() => [InvitedUserResponse])
+  async getProjectInvites(
+    @Arg('projectId', () => ID) projectId: number
+  ) {
+    try {
+      const invitedUsers = await redisProjects.getAll({ id: projectId })
+      return invitedUsers.map(async (email: string) => {
+        const user = await User.findOne({ email })
+        if (user) {
+          return {
+            email: user.email,
+            avatar: user.avatar
+          }
+        }
+        return {
+          email: email.substr(0, email.indexOf(redisSeparator.project)),
+          avatar: null
+        }
+      })
+    } catch (err) {
+      console.error(err);
       return err;
     }
   }
