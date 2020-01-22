@@ -3,11 +3,12 @@ import { MyContext } from '../../services/context';
 import { verify } from 'jsonwebtoken';
 import { verifyIdToken } from './../../services/auth/google';
 import { User } from '../../entity/User';
+import { AuthenticationError } from 'apollo-server-express';
 
 export const isAuth: MiddlewareFn<MyContext> = async ({ context }, next) => {
   const authorization = context.req.headers['authorization'];
   if (!authorization) {
-    throw new Error('Not authenticated');
+    throw new AuthenticationError('Not authenticated');
   }
 
   try {
