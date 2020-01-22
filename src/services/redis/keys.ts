@@ -1,5 +1,4 @@
 export const redisKeys = {
-  projectInvite: (email: string) => `project-invite-${email}`,
   projectInvites: (projectId: string | number) => `project-invites-${projectId}`,
   newEmail: (newEmail: string) => `new-email-${newEmail}`,
   forgotEmail: (email: string) => `forgot-email-${email}`,
@@ -9,3 +8,7 @@ export const redisKeys = {
 }
 
 export const redisExpirationDuration = 7200
+
+export const redisSeparator = {
+  project: '/xFe'
+}
