@@ -987,7 +987,7 @@ export const emailTemplate = ({
 																style="padding-top:0; padding-right:18px; padding-bottom:9px; padding-left:18px;">
 
 																<h1>${header}</h1>
-																<p>${message}</p>
+																<p>${message || ''}</p>
                                 <p>${body}</p>
 																
 																${
