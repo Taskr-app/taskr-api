@@ -29,6 +29,7 @@ import { Upload } from './types/Upload';
 import { cloudinary } from '../services/cloudinary';
 import { newEmail } from '../services/emails/newEmail';
 import { redisKeys, redisExpirationDuration } from '../services/redis/keys';
+import { validateRegistration, RegistrationContext } from './middleware/validateRegistration';
 
 @Resolver()
 export class UserResolver {
@@ -85,7 +86,7 @@ export class UserResolver {
       }
 
       const verificationLink = v4();
-      await transporter.sendMail(verificationEmail(email, verificationLink));
+      transporter.sendMail(verificationEmail(email, verificationLink));
       const hashedPassword = await hash(password, 12);
 
       await redis.hmset(email, {
@@ -119,7 +120,7 @@ export class UserResolver {
       });
       await redis.expire(email, redisExpirationDuration);
 
-      await transporter.sendMail(verificationEmail(email, newVerificationLink));
+      transporter.sendMail(verificationEmail(email, newVerificationLink));
       return newVerificationLink;
     } catch (err) {
       console.log(err);
@@ -128,24 +129,24 @@ export class UserResolver {
   }
 
   @Mutation(() => LoginResponse)
-  @UseMiddleware(rateLimit(10))
+  @UseMiddleware(rateLimit(10), validateRegistration)
   async register(
     @Arg('email') email: string,
-    @Arg('verificationLink') verificationLink: string,
+    @Arg('verificationLink') _verificationLink: string,
     @Arg('registerKey', { nullable: true }) registerKey: string,
     @Arg('password', { nullable: true }) password: string,
-    @Ctx() { res }: MyContext
+    @Ctx() { res, password: storedPassword }: RegistrationContext
   ) {
     try {
-      const key = registerKey ? `${registerKey}-${email}` : email;
-      const {
-        link: storedLink,
-        password: storedPassword
-      } = await redis.hgetall(key);
+      // const key = registerKey ? registerKey : email;
+      // const {
+      //   link: storedLink,
+      //   password: storedPassword
+      // } = await redis.hgetall(key);
 
-      if (verificationLink !== storedLink) {
-        throw new Error('This link has expired');
-      }
+      // if (verificationLink !== storedLink) {
+      //   throw new Error('This link has expired');
+      // }
 
       const username = email.split('@')[0];
       const user = await User.create({
@@ -353,7 +354,7 @@ export class UserResolver {
       }
 
       const verificationLink = v4();
-      await transporter.sendMail(newEmail(email, verificationLink, user.email));
+      transporter.sendMail(newEmail(email, verificationLink, user.email));
       await redis.hmset(redisKeys.newEmail(email), {
         email: user.email,
         link: verificationLink
@@ -417,7 +418,7 @@ export class UserResolver {
       await user.save();
       
       const forgotPasswordLink = v4();
-      await transporter.sendMail(forgotPasswordEmail(email, forgotPasswordLink));
+      transporter.sendMail(forgotPasswordEmail(email, forgotPasswordLink));
       await redis.set(redisKeys.forgotEmail(email), forgotPasswordLink, 'EX', redisExpirationDuration);
       return forgotPasswordLink;
     } catch (err) {
