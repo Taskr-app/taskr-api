@@ -283,7 +283,6 @@ export class ProjectResolver {
       });
       if (!project) throw new Error('This project doesn\'t exist');
       if (!comparePublicProjectLink(link, projectId)) {
-        console.log(link, projectId)
         throw new Error('This link is either incorrect or has expired');
       }
       project.members = [...project.members, me];
