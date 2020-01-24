@@ -18,7 +18,7 @@ import { v4 } from 'uuid';
 import { projectInviteEmail } from '../services/emails/projectInviteEmail';
 import { transporter } from '../services/emails/transporter';
 import { Team } from '../entity/Team';
-import { generateProjectLink } from '../services/links';
+import { generateProjectLink, comparePublicProjectLink } from '../services/links';
 import { isAuth, isOwner, rateLimit } from './middleware';
 import { redisProjects } from '../services/redis/projects';
 import { validateProjectInvitationLink } from './middleware/validateLink';
@@ -270,7 +270,7 @@ export class ProjectResolver {
   @Mutation(() => Boolean)
   @UseMiddleware(isAuth)
   async acceptPublicProjectLink(
-    @Arg('link') link: String,
+    @Arg('link') link: string,
     @Arg('projectId', () => ID) projectId: number,
     @Ctx() { payload }: MyContext
   ) {
@@ -282,8 +282,7 @@ export class ProjectResolver {
         where: { id: projectId }
       });
       if (!project) throw new Error('This project doesn\'t exist');
-      const publicLink = generateProjectLink(project.id);
-      if (publicLink !== link) {
+      if (!comparePublicProjectLink(link, projectId)) {
         throw new Error('This link is either incorrect or has expired');
       }
       project.members = [...project.members, me];
