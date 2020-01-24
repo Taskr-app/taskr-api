@@ -30,6 +30,7 @@ import { cloudinary } from '../services/cloudinary';
 import { newEmail } from '../services/emails/newEmail';
 import { redisKeys, redisExpirationDuration } from '../services/redis/keys';
 import { validateRegistration, RegistrationContext } from './middleware/validateRegistration';
+import { eagerOptions, bytesLimit, bytesError } from '../services/cloudinary/options'
 
 @Resolver()
 export class UserResolver {
@@ -309,9 +310,17 @@ export class UserResolver {
       const { createReadStream } = image;
       const stream = createReadStream();
       const imagePath = (stream as any).path;
+      console.log((stream as any))
+      const bytes = (stream as any)._writeStream.bytesWritten
+      if (parseInt(bytes) > bytesLimit) {
+        throw new Error(bytesError)
+      }
       if (!imagePath)
         throw new Error('A path for the image could not be created');
-      const res = await cloudinary.uploader.upload(imagePath);
+      const res = await cloudinary.uploader.upload(imagePath, {
+        eager: eagerOptions
+      });
+      console.log(res)
       user!.avatar = res.public_id;
       await user!.save();
       return true;
