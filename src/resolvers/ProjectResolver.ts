@@ -5,7 +5,11 @@ import {
   UseMiddleware,
   Ctx,
   ID,
-  Query
+  Query,
+  PubSub,
+  Publisher,
+  Subscription,
+  Root
 } from 'type-graphql';
 import { Project } from '../entity/Project';
 import { MyContext } from '../services/context';
@@ -19,7 +23,12 @@ import { isAuth, isOwner, rateLimit } from './middleware';
 import { redisProjects } from '../services/redis/projects';
 import { validateProjectInvitationLink } from './middleware/validateLink';
 import { redisSeparator } from '../services/redis/keys';
-import { InvitedUserResponse } from './types/InvitedUserResponse';
+import { InvitedUserResponse, InvitedUserSubscriptionPayload, AcceptedUserSubscriptionPayload } from './types/InvitedUserResponse';
+
+export const topics = {
+  sendInvite: 'SEND_PROJECT_INVITE',
+  acceptInvite: 'ACCEPT_PROJECT_INVITE'
+};
 
 @Resolver()
 export class ProjectResolver {
@@ -152,9 +161,10 @@ export class ProjectResolver {
   @Mutation(() => Boolean)
   @UseMiddleware(isAuth, rateLimit(10))
   async sendProjectInviteLink(
-    @Arg('projectId', () => ID) projectId: string,
+    @Arg('projectId', () => ID) projectId: number,
     @Arg('emails', () => [String]) emails: [string],
     @Ctx() { payload }: MyContext,
+    @PubSub(topics.sendInvite) publish: Publisher<InvitedUserSubscriptionPayload>,
     @Arg('message', { nullable: true }) message?: string
   ) {
     try {
@@ -167,7 +177,7 @@ export class ProjectResolver {
           return;
         }
         const link = v4();
-        await transporter.sendMail(
+        transporter.sendMail(
           projectInviteEmail({
             sender: me!.username,
             email,
@@ -181,6 +191,7 @@ export class ProjectResolver {
           link,
           email
         })
+        await publish({ email, projectId })
       }))
       return true;
     } catch (err) {
@@ -195,7 +206,8 @@ export class ProjectResolver {
     @Arg('email') email: string,
     @Arg('id', () => ID) id: number,
     @Arg('projectInviteLink') projectInviteLink: string,
-    @Ctx() { payload }: MyContext
+    @Ctx() { payload }: MyContext,
+    @PubSub(topics.acceptInvite) publish: Publisher<AcceptedUserSubscriptionPayload>
   ) {
     try {
       const user = await User.findOne({ id: payload!.userId });
@@ -208,6 +220,7 @@ export class ProjectResolver {
       if (!project) throw new Error('This project doesn\'t exist');
       project.members = [...project.members, user];
       await project.save();
+      await publish({ ...user, projectId: id })
       await redisProjects.delete({ email, id, link: projectInviteLink })
       return true;
     } catch (err) {
@@ -280,5 +293,29 @@ export class ProjectResolver {
       console.log(err);
       return err;
     }
+  }
+
+  @Subscription(() => InvitedUserResponse, {
+    topics: topics.sendInvite,
+    filter: ({ payload, args }) => parseInt(args.projectId) === parseInt(payload.projectId)
+  })
+  onSendProjectInvite(
+    @Root() invitedUserPayload: InvitedUserSubscriptionPayload,
+    @Arg('projectId', () => ID) _projectId: string | number
+  ) {
+    const { projectId, ...invitedUser } = invitedUserPayload;
+    return invitedUser
+  }
+
+  @Subscription(() => User, {
+    topics: topics.acceptInvite,
+    filter: ({ payload, args }) => parseInt(args.projectId) === parseInt(payload.projectId)
+  })
+  onAcceptProjectInvite(
+    @Root() acceptedUser: AcceptedUserSubscriptionPayload,
+    @Arg('projectId', () => ID) _projectId: string | number
+  ) {
+    const { projectId, ...user } = acceptedUser
+    return user
   }
 }
