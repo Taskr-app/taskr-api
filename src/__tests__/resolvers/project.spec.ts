@@ -234,7 +234,7 @@ describe('Project Resolver', () => {
         `,
         variables: {
           projectId: 1,
-          link: projectLink.data!.getPublicProjectLink
+          link: projectLink.data!.getPublicProjectLink.split('id=')[1]
         }
       });
 
