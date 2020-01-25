@@ -29,42 +29,37 @@ import { Upload } from './types/Upload';
 import { cloudinary } from '../services/cloudinary';
 import { newEmail } from '../services/emails/newEmail';
 import { redisKeys, redisExpirationDuration } from '../services/redis/keys';
-import { validateRegistration, RegistrationContext } from './middleware/validateRegistration';
-import { eagerOptions, bytesLimit, bytesError } from '../services/cloudinary/options'
+import {
+  validateRegistration,
+  RegistrationContext
+} from './middleware/validateRegistration';
+import {
+  eagerOptions,
+  bytesLimit,
+  bytesError
+} from '../services/cloudinary/options';
 
 @Resolver()
 export class UserResolver {
   @Query(() => User)
   @UseMiddleware(isAuth)
   async me(@Ctx() { payload }: MyContext) {
-    try {
-      const user = await User.findOne({ id: payload!.userId });
-      return user;
-    } catch (err) {
-      console.log(err);
-      return null;
-    }
+    const user = await User.findOne({ id: payload!.userId });
+    return user;
   }
 
   @Query(() => [User])
   @UseMiddleware(isAuth)
-  async getUsersByEmail(
-    @Arg('search') search: string
-  ) {
-    try {
-      const users = await User.find({
-        where: {
-          email: Like(`%${search}%`)
-        },
-        take: 6
-      })
+  async getUsersByEmail(@Arg('search') search: string) {
+    const users = await User.find({
+      where: {
+        email: Like(`%${search}%`)
+      },
+      take: 6
+    });
 
-      if (!users) throw new Error('No users found')
-      return users
-    } catch (err) {
-      console.error(err);
-      return err;
-    }
+    if (!users) throw new Error('No users found');
+    return users;
   }
 
   @Mutation(() => String)
@@ -73,60 +68,50 @@ export class UserResolver {
     @Arg('email') email: string,
     @Arg('password') password: string
   ) {
-    try {
-      const user = await User.findOne({ email });
-      if (user) {
-        throw new Error('This email is already in use');
-      }
-      const unverifiedUser = await redis.hgetall(email);
-      if (Object.keys(unverifiedUser).length) {
-        this.resendVerificationLink(email);
-        throw new Error(
-          'This account has not been validated. Please check your email for the validation link'
-        );
-      }
-
-      const verificationLink = v4();
-      transporter.sendMail(verificationEmail(email, verificationLink));
-      const hashedPassword = await hash(password, 12);
-
-      await redis.hmset(email, {
-        password: hashedPassword,
-        link: verificationLink
-      });
-      await redis.expire(email, redisExpirationDuration);
-
-      return verificationLink;
-    } catch (err) {
-      console.log(err);
-      return err;
+    const user = await User.findOne({ email });
+    if (user) {
+      throw new Error('This email is already in use');
     }
+    const unverifiedUser = await redis.hgetall(email);
+    if (Object.keys(unverifiedUser).length) {
+      this.resendVerificationLink(email);
+      throw new Error(
+        'This account has not been validated. Please check your email for the validation link'
+      );
+    }
+
+    const verificationLink = v4();
+    transporter.sendMail(verificationEmail(email, verificationLink));
+    const hashedPassword = await hash(password, 12);
+
+    await redis.hmset(email, {
+      password: hashedPassword,
+      link: verificationLink
+    });
+    await redis.expire(email, redisExpirationDuration);
+
+    return verificationLink;
   }
 
   @Mutation(() => String)
   @UseMiddleware(rateLimit(10))
   async resendVerificationLink(@Arg('email') email: string) {
-    try {
-      const user = await User.findOne({ email });
-      if (user) throw new Error('This account has already been verified');
-      const { password, link } = await redis.hgetall(email);
-      if (!password || !link) {
-        throw new Error('This email is no longer valid, sign up again');
-      }
-      const newVerificationLink = v4();
-
-      await redis.hmset(email, {
-        password,
-        link: newVerificationLink
-      });
-      await redis.expire(email, redisExpirationDuration);
-
-      transporter.sendMail(verificationEmail(email, newVerificationLink));
-      return newVerificationLink;
-    } catch (err) {
-      console.log(err);
-      return err;
+    const user = await User.findOne({ email });
+    if (user) throw new Error('This account has already been verified');
+    const { password, link } = await redis.hgetall(email);
+    if (!password || !link) {
+      throw new Error('This email is no longer valid, sign up again');
     }
+    const newVerificationLink = v4();
+
+    await redis.hmset(email, {
+      password,
+      link: newVerificationLink
+    });
+    await redis.expire(email, redisExpirationDuration);
+
+    transporter.sendMail(verificationEmail(email, newVerificationLink));
+    return newVerificationLink;
   }
 
   @Mutation(() => LoginResponse)
@@ -138,37 +123,22 @@ export class UserResolver {
     @Arg('password', { nullable: true }) password: string,
     @Ctx() { res, password: storedPassword }: RegistrationContext
   ) {
-    try {
-      // const key = registerKey ? registerKey : email;
-      // const {
-      //   link: storedLink,
-      //   password: storedPassword
-      // } = await redis.hgetall(key);
-
-      // if (verificationLink !== storedLink) {
-      //   throw new Error('This link has expired');
-      // }
-
-      const username = email.split('@')[0];
-      const user = await User.create({
-        email,
-        password: registerKey ? await hash(password, 12) : storedPassword,
-        username,
-        auth: UserAuthType.WEBSITE
-      }).save();
-      if (!registerKey) {
-        await redis.del(email);
-      }
-
-      sendRefreshToken(res, createRefreshToken(user));
-      return {
-        accessToken: createAccessToken(user),
-        user
-      };
-    } catch (err) {
-      console.log(err);
-      return err;
+    const username = email.split('@')[0];
+    const user = await User.create({
+      email,
+      password: registerKey ? await hash(password, 12) : storedPassword,
+      username,
+      auth: UserAuthType.WEBSITE
+    }).save();
+    if (!registerKey) {
+      await redis.del(email);
     }
+
+    sendRefreshToken(res, createRefreshToken(user));
+    return {
+      accessToken: createAccessToken(user),
+      user
+    };
   }
 
   @Mutation(() => LoginResponse)
@@ -177,40 +147,32 @@ export class UserResolver {
     @Arg('password') password: string,
     @Ctx() { res }: MyContext
   ) {
-    try {
-      const user = await User.findOne({ email });
+    const user = await User.findOne({ email });
 
-      if (!user) {
-        throw new Error('Incorrect email address');
-      }
-
-      // if user's password from db is NULL
-      if (!user.password) {
-        throw new Error(
-          'This account doesn\'t have a password set. Do you normally login with google?'
-        );
-      }
-
-      const valid = await compare(password, user.password);
-
-      if (!valid) {
-        throw new Error('Incorrect password');
-      }
-
-      // login succesful
-
-      // send refreshToken thru cookie
-      sendRefreshToken(res, createRefreshToken(user));
-
-      // send accessToken to client
-      return {
-        accessToken: createAccessToken(user),
-        user
-      };
-    } catch (err) {
-      console.log(err);
-      return err;
+    if (!user) {
+      throw new Error('Incorrect email address');
     }
+
+    // if user's password from db is NULL
+    if (!user.password) {
+      throw new Error(
+        'This account doesn\'t have a password set. Do you normally login with google?'
+      );
+    }
+
+    const valid = await compare(password, user.password);
+
+    if (!valid) {
+      throw new Error('Incorrect password');
+    }
+    // login succesful
+    // send refreshToken thru cookie
+    sendRefreshToken(res, createRefreshToken(user));
+    // send accessToken to client
+    return {
+      accessToken: createAccessToken(user),
+      user
+    };
   }
 
   @Mutation(() => Boolean)
@@ -241,57 +203,52 @@ export class UserResolver {
   @Mutation(() => LoginResponse)
   //TODO: Better mutation naming
   async auth_googleOAuth(@Arg('code') code: string, @Ctx() { res }: MyContext) {
-    try {
-      const client = await createOAuth2Client();
+    const client = await createOAuth2Client();
 
-      if (!client) {
-        throw new Error('Failed to create OAuth2 client');
-      }
-      const { tokens } = await client.getToken(decodeURIComponent(code));
-      client.setCredentials(tokens);
-
-      if (!tokens) {
-        throw new Error('Invalid code for tokens');
-      }
-      const payload = await verifyIdToken(tokens.id_token!);
-
-      if (!payload) {
-        throw new Error('Failed to retrieve payload');
-      }
-      let user = await User.findOne({ email: payload.email });
-
-      if (!user) {
-        // register user to db if they don't exist in system
-        user = User.create({
-          email: payload.email,
-          username: payload.name,
-          auth: UserAuthType.GOOGLE
-        });
-        if (payload.picture) {
-          let res = await cloudinary.uploader.upload(payload.picture);
-          user.avatar = res.public_id;
-        }
-
-        await user.save();
-      }
-
-      if (!tokens.refresh_token) {
-        // if no refresh_token, retrieve refreshtoken via api request
-        // tokens.refresh_token = await
-
-        throw new Error('Failed to retrieve refresh_token from google');
-      }
-
-      sendRefreshToken(res, createRefreshToken(tokens.refresh_token!));
-
-      return {
-        accessToken: createAccessToken(tokens.id_token!),
-        user
-      };
-    } catch (err) {
-      console.log(err);
-      return err;
+    if (!client) {
+      throw new Error('Failed to create OAuth2 client');
     }
+    const { tokens } = await client.getToken(decodeURIComponent(code));
+    client.setCredentials(tokens);
+
+    if (!tokens) {
+      throw new Error('Invalid code for tokens');
+    }
+    const payload = await verifyIdToken(tokens.id_token!);
+
+    if (!payload) {
+      throw new Error('Failed to retrieve payload');
+    }
+    let user = await User.findOne({ email: payload.email });
+
+    if (!user) {
+      // register user to db if they don't exist in system
+      user = User.create({
+        email: payload.email,
+        username: payload.name,
+        auth: UserAuthType.GOOGLE
+      });
+      if (payload.picture) {
+        let res = await cloudinary.uploader.upload(payload.picture);
+        user.avatar = res.public_id;
+      }
+
+      await user.save();
+    }
+
+    if (!tokens.refresh_token) {
+      // if no refresh_token, retrieve refreshtoken via api request
+      // tokens.refresh_token = await
+
+      throw new Error('Failed to retrieve refresh_token from google');
+    }
+
+    sendRefreshToken(res, createRefreshToken(tokens.refresh_token!));
+
+    return {
+      accessToken: createAccessToken(tokens.id_token!),
+      user
+    };
   }
 
   @Mutation(() => Boolean)
@@ -300,34 +257,28 @@ export class UserResolver {
     @Arg('image', () => GraphQLUpload) image: Upload,
     @Ctx() { payload }: MyContext
   ) {
-    try {
-      const user = await User.findOne({ id: payload!.userId });
-      if (!user) throw new Error('This user doesn\'t exist');
-      if (user.avatar) {
-        await cloudinary.uploader.destroy(user.avatar);
-      }
-
-      const { createReadStream } = image;
-      const stream = createReadStream();
-      const imagePath = (stream as any).path;
-      console.log((stream as any))
-      const bytes = (stream as any)._writeStream.bytesWritten
-      if (parseInt(bytes) > bytesLimit) {
-        throw new Error(bytesError)
-      }
-      if (!imagePath)
-        throw new Error('A path for the image could not be created');
-      const res = await cloudinary.uploader.upload(imagePath, {
-        eager: eagerOptions
-      });
-      console.log(res)
-      user!.avatar = res.public_id;
-      await user!.save();
-      return true;
-    } catch (err) {
-      console.log(err);
-      return err;
+    const user = await User.findOne({ id: payload!.userId });
+    if (!user) throw new Error('This user doesn\'t exist');
+    if (user.avatar) {
+      await cloudinary.uploader.destroy(user.avatar);
     }
+
+    const { createReadStream } = image;
+    const stream = createReadStream();
+    const imagePath = (stream as any).path;
+    const bytes = (stream as any)._writeStream.bytesWritten;
+    if (parseInt(bytes) > bytesLimit) {
+      throw new Error(bytesError);
+    }
+    if (!imagePath)
+      throw new Error('A path for the image could not be created');
+    const res = await cloudinary.uploader.upload(imagePath, {
+      eager: eagerOptions
+    });
+    console.log(res);
+    user!.avatar = res.public_id;
+    await user!.save();
+    return true;
   }
 
   @Mutation(() => Boolean)
@@ -336,16 +287,11 @@ export class UserResolver {
     @Arg('username') username: string,
     @Ctx() { payload }: MyContext
   ) {
-    try {
-      const user = await User.findOne({ id: payload!.userId });
-      if (!user) throw new Error('User not found');
-      user.username = username;
-      await user!.save();
-      return true;
-    } catch (err) {
-      console.log(err);
-      return err;
-    }
+    const user = await User.findOne({ id: payload!.userId });
+    if (!user) throw new Error('User not found');
+    user.username = username;
+    await user!.save();
+    return true;
   }
 
   @Mutation(() => Boolean)
@@ -354,25 +300,20 @@ export class UserResolver {
     @Arg('email') email: string,
     @Ctx() { payload }: MyContext
   ) {
-    try {
-      const user = await User.findOne({ id: payload!.userId });
-      if (!user) throw new Error('User not found');
-      const existingUserEmail = await User.findOne({ email });
-      if (existingUserEmail) {
-        throw new Error('Sorry, this email already exists');
-      }
-
-      const verificationLink = v4();
-      transporter.sendMail(newEmail(email, verificationLink, user.email));
-      await redis.hmset(redisKeys.newEmail(email), {
-        email: user.email,
-        link: verificationLink
-      });
-      return true;
-    } catch (err) {
-      console.log(err);
-      return err;
+    const user = await User.findOne({ id: payload!.userId });
+    if (!user) throw new Error('User not found');
+    const existingUserEmail = await User.findOne({ email });
+    if (existingUserEmail) {
+      throw new Error('Sorry, this email already exists');
     }
+
+    const verificationLink = v4();
+    transporter.sendMail(newEmail(email, verificationLink, user.email));
+    await redis.hmset(redisKeys.newEmail(email), {
+      email: user.email,
+      link: verificationLink
+    });
+    return true;
   }
 
   @Mutation(() => Boolean)
@@ -382,30 +323,25 @@ export class UserResolver {
     @Arg('password', { nullable: true }) password: string,
     @Arg('verificationLink') verificationLink: string
   ) {
-    try {
-      const { link: storedLink, email: storedEmail } = await redis.hgetall(
-        redisKeys.newEmail(email)
+    const { link: storedLink, email: storedEmail } = await redis.hgetall(
+      redisKeys.newEmail(email)
+    );
+    if (storedLink !== verificationLink)
+      throw new Error('This link has expired');
+    const user = await User.findOne({ email: storedEmail });
+    if (!user)
+      throw new Error(
+        'The user email you have requested the email change no longer exists'
       );
-      if (storedLink !== verificationLink)
-        throw new Error('This link has expired');
-      const user = await User.findOne({ email: storedEmail });
-      if (!user)
-        throw new Error(
-          'The user email you have requested the email change no longer exists'
-        );
 
-      if (user.auth === UserAuthType.GOOGLE && password) {
-        user.password = await hash(password, 12);
-      }
-      user.email = email;
-      user.auth = UserAuthType.WEBSITE;
-      await user.save();
-      await redis.del(redisKeys.newEmail(email));
-      return true;
-    } catch (err) {
-      console.log(err);
-      return err;
+    if (user.auth === UserAuthType.GOOGLE && password) {
+      user.password = await hash(password, 12);
     }
+    user.email = email;
+    user.auth = UserAuthType.WEBSITE;
+    await user.save();
+    await redis.del(redisKeys.newEmail(email));
+    return true;
   }
 
   @Mutation(() => String)
@@ -414,26 +350,26 @@ export class UserResolver {
     @Arg('email') email: string,
     @Ctx() { payload }: MyContext
   ) {
-    try {
-      if (payload) {
-        throw new Error('What are you trying to do?');
-      }
-      const user = await User.findOne({ email });
-      if (!user) {
-        throw new Error('This user email does not exist');
-      }
-
-      user.tokenVersion++;
-      await user.save();
-      
-      const forgotPasswordLink = v4();
-      transporter.sendMail(forgotPasswordEmail(email, forgotPasswordLink));
-      await redis.set(redisKeys.forgotEmail(email), forgotPasswordLink, 'EX', redisExpirationDuration);
-      return forgotPasswordLink;
-    } catch (err) {
-      console.log(err);
-      return err;
+    if (payload) {
+      throw new Error('What are you trying to do?');
     }
+    const user = await User.findOne({ email });
+    if (!user) {
+      throw new Error('This user email does not exist');
+    }
+
+    user.tokenVersion++;
+    await user.save();
+
+    const forgotPasswordLink = v4();
+    transporter.sendMail(forgotPasswordEmail(email, forgotPasswordLink));
+    await redis.set(
+      redisKeys.forgotEmail(email),
+      forgotPasswordLink,
+      'EX',
+      redisExpirationDuration
+    );
+    return forgotPasswordLink;
   }
 
   @Mutation(() => Boolean)
@@ -443,22 +379,17 @@ export class UserResolver {
     @Arg('forgotPasswordLink') forgotPasswordLink: string,
     @Arg('password') password: string
   ) {
-    try {
-      const storedLink = await redis.get(redisKeys.forgotEmail(email));
-      if (storedLink !== forgotPasswordLink) {
-        throw new Error('This link has expired');
-      }
-      const user = await User.findOne({ email });
-      if (!user) throw new Error('This user doesn\'t exist');
-      const hashedPassword = await hash(password, 12);
-      user.password = hashedPassword;
-      await user.save();
-      await redis.del(redisKeys.forgotEmail(email));
-      return true;
-    } catch (err) {
-      console.log(err);
-      return err;
+    const storedLink = await redis.get(redisKeys.forgotEmail(email));
+    if (storedLink !== forgotPasswordLink) {
+      throw new Error('This link has expired');
     }
+    const user = await User.findOne({ email });
+    if (!user) throw new Error('This user doesn\'t exist');
+    const hashedPassword = await hash(password, 12);
+    user.password = hashedPassword;
+    await user.save();
+    await redis.del(redisKeys.forgotEmail(email));
+    return true;
   }
 
   @Mutation(() => Boolean)
@@ -468,28 +399,23 @@ export class UserResolver {
     @Arg('newPassword') newPassword: string,
     @Ctx() { payload }: MyContext
   ) {
-    try {
-      const user = await User.findOne({ id: payload!.userId });
-      if (!user) throw new Error('User not found');
-      // if user's password from db is NULL
-      if (!user.password) {
-        throw new Error(
-          'This account doesn\'t have a password set. Do you normally login with google?'
-        );
-      }
-
-      const valid = await compare(currentPassword, user.password);
-      if (!valid) {
-        throw new Error('Incorrect password');
-      }
-      const hashedPassword = await hash(newPassword, 12);
-      user.password = hashedPassword;
-      await user.save();
-      return true;
-    } catch (err) {
-      console.log(err);
-      return err;
+    const user = await User.findOne({ id: payload!.userId });
+    if (!user) throw new Error('User not found');
+    // if user's password from db is NULL
+    if (!user.password) {
+      throw new Error(
+        'This account doesn\'t have a password set. Do you normally login with google?'
+      );
     }
+
+    const valid = await compare(currentPassword, user.password);
+    if (!valid) {
+      throw new Error('Incorrect password');
+    }
+    const hashedPassword = await hash(newPassword, 12);
+    user.password = hashedPassword;
+    await user.save();
+    return true;
   }
 
   @Mutation(() => Boolean)

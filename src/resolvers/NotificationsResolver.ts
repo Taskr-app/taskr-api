@@ -7,7 +7,7 @@ import {
   UseMiddleware,
   Ctx,
   Subscription,
-  Root,
+  Root
 } from 'type-graphql';
 import { Notifications } from './types/Notifications';
 import { MyContext } from '../services/context';
@@ -23,56 +23,36 @@ export const topics = {
 export class NotificationsResolver {
   @Mutation(() => Boolean)
   async createNotification(@Arg('userId', () => ID) userId: number) {
-    try {
-      await Notifications.create({
-        userId,
-        type: 'test'
-      });
+    await Notifications.create({
+      userId,
+      type: 'test'
+    });
 
-      return true;
-    } catch (err) {
-      console.log(err);
-      return err;
-    }
+    return true;
   }
 
   @Query(() => [Notifications])
   @UseMiddleware(isAuth)
   async getNotifications(@Ctx() { payload }: MyContext) {
-    try {
-      const notifications = await Notifications.find({
-        userId: payload!.userId
-      });
-      if (!notifications) throw new Error('Notifications doesn\'t exist');
-      return notifications;
-    } catch (err) {
-      console.log(err);
-      return err;
-    }
+    const notifications = await Notifications.find({
+      userId: payload!.userId
+    });
+    if (!notifications) throw new Error('Notifications doesn\'t exist');
+    return notifications;
   }
 
   @Query(() => Notifications)
   async getNotification(@Arg('id', () => ID) id: string) {
-    try {
-      const notification = await Notifications.findOne({ id });
-      if (!notification) throw new Error('This notification doesn\'t exist');
-      return notification;
-    } catch (err) {
-      console.log(err);
-      return err;
-    }
+    const notification = await Notifications.findOne({ id });
+    if (!notification) throw new Error('This notification doesn\'t exist');
+    return notification;
   }
 
   @Mutation(() => Boolean)
   async deleteNotification(@Arg('id', () => ID) id: string) {
-    try {
-      const notification = await Notifications.findOne({ id });
-      await notification.remove();
-      return true;
-    } catch (err) {
-      console.log(err);
-      return err;
-    }
+    const notification = await Notifications.findOne({ id });
+    await notification.remove();
+    return true;
   }
 
   @Subscription(() => Notifications, {
