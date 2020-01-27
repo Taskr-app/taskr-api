@@ -74,7 +74,6 @@ export class UserResolver {
     }
     const unverifiedUser = await redis.hgetall(email);
     if (Object.keys(unverifiedUser).length) {
-      this.resendVerificationLink(email);
       throw new Error(
         'This account has not been validated. Please check your email for the validation link'
       );
