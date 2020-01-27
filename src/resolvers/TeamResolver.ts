@@ -31,57 +31,42 @@ export class TeamResolver extends TeamBaseResolver {
     @Arg('id', () => ID) id: number,
     @Ctx() { payload }: MyContext
   ) {
-    try {
-      const team = await Team.createQueryBuilder('team')
-        .innerJoin('team.members', 'user', 'user.id = :userId', {
-          userId: payload!.userId
-        })
-        .where('team.id = :teamId', { teamId: id })
-        .innerJoinAndSelect('team.members', 'member')
-        .leftJoinAndSelect('team.projects', 'projects')
-        .getOne();
-      if (!team)
-        throw new Error(
-          'This team doesn\'t exist or you don\'t have access to this team'
-        );
-      return team;
-    } catch (err) {
-      console.log(err);
-      return err;
-    }
+    const team = await Team.createQueryBuilder('team')
+      .innerJoin('team.members', 'user', 'user.id = :userId', {
+        userId: payload!.userId
+      })
+      .where('team.id = :teamId', { teamId: id })
+      .innerJoinAndSelect('team.members', 'member')
+      .leftJoinAndSelect('team.projects', 'projects')
+      .getOne();
+    if (!team)
+      throw new Error(
+        'This team doesn\'t exist or you don\'t have access to this team'
+      );
+    return team;
   }
 
   @Query(() => [Team])
   @UseMiddleware(isAuth)
   async getUserTeams(@Ctx() { payload }: MyContext) {
-    try {
-      const user = await User.findOne({
-        relations: ['teams'],
-        where: { id: payload!.userId }
-      });
-      if (!user) throw new Error('This user doesn\'t exist');
-      return user.teams;
-    } catch (err) {
-      console.log(err);
-      return err;
-    }
+    const user = await User.findOne({
+      relations: ['teams'],
+      where: { id: payload!.userId }
+    });
+    if (!user) throw new Error('This user doesn\'t exist');
+    return user.teams;
   }
 
   @Mutation(() => Team)
   @UseMiddleware(isAuth)
   async createTeam(@Arg('name') name: string, @Ctx() { payload }: MyContext) {
-    try {
-      const user = await User.findOne({ where: { id: payload!.userId } });
-      const team = await Team.create({
-        name,
-        owner: user
-      });
-      team.members = [user!];
-      return await team.save();
-    } catch (err) {
-      console.log(err);
-      return err;
-    }
+    const user = await User.findOne({ where: { id: payload!.userId } });
+    const team = await Team.create({
+      name,
+      owner: user
+    });
+    team.members = [user!];
+    return await team.save();
   }
 
   @Mutation(() => String)
@@ -91,27 +76,22 @@ export class TeamResolver extends TeamBaseResolver {
     @Arg('email') email: string,
     @Ctx() { payload }: MyContext
   ) {
-    try {
-      const me = await User.findOne({ where: { id: payload!.userId } });
-      const team = await Team.findOne({ where: { id: teamId } });
-      if (!team) throw new Error('This team doesn\'t exist');
+    const me = await User.findOne({ where: { id: payload!.userId } });
+    const team = await Team.findOne({ where: { id: teamId } });
+    if (!team) throw new Error('This team doesn\'t exist');
 
-      const link = v4();
-      await transporter.sendMail(
-        teamInviteEmail({
-          sender: me!.username,
-          email,
-          teamName: team.name,
-          link
-        })
-      );
-      await redis.hmset(redisKeys.teamInvite(email), { id: teamId, link });
-      await redis.expire(redisKeys.teamInvite(email), redisExpirationDuration);
-      return link;
-    } catch (err) {
-      console.log(err);
-      return err;
-    }
+    const link = v4();
+    await transporter.sendMail(
+      teamInviteEmail({
+        sender: me!.username,
+        email,
+        teamName: team.name,
+        link
+      })
+    );
+    await redis.hmset(redisKeys.teamInvite(email), { id: teamId, link });
+    await redis.expire(redisKeys.teamInvite(email), redisExpirationDuration);
+    return link;
   }
 
   @Mutation(() => Boolean)
@@ -121,26 +101,21 @@ export class TeamResolver extends TeamBaseResolver {
     @Arg('teamInviteLink') teamInviteLink: string,
     @Ctx() { payload }: MyContext
   ) {
-    try {
-      const { link: storedLink, id: teamId } = await redis.hgetall(
-        redisKeys.teamInvite(email)
-      );
-      if (storedLink !== teamInviteLink) {
-        throw new Error('This link has expired');
-      }
-
-      const user = await User.findOne({ id: payload!.userId });
-      if (!user) throw new Error('This user doesn\'t exist');
-      const team = await Team.findOne({ where: { id: teamId } });
-      if (!team) throw new Error('This team doesn\'t exist');
-      team.members = uniqBy([...team.members, user], 'id');
-      await team.save();
-      await redis.del(redisKeys.teamInvite(email));
-      return true;
-    } catch (err) {
-      console.log(err);
-      return err;
+    const { link: storedLink, id: teamId } = await redis.hgetall(
+      redisKeys.teamInvite(email)
+    );
+    if (storedLink !== teamInviteLink) {
+      throw new Error('This link has expired');
     }
+
+    const user = await User.findOne({ id: payload!.userId });
+    if (!user) throw new Error('This user doesn\'t exist');
+    const team = await Team.findOne({ where: { id: teamId } });
+    if (!team) throw new Error('This team doesn\'t exist');
+    team.members = uniqBy([...team.members, user], 'id');
+    await team.save();
+    await redis.del(redisKeys.teamInvite(email));
+    return true;
   }
 
   @Mutation(() => Boolean)
@@ -150,20 +125,15 @@ export class TeamResolver extends TeamBaseResolver {
     @Arg('userId', () => ID) userId: number,
     @Ctx() { entity: team }: { entity: Team }
   ) {
-    try {
-      const user = await User.findOne({ where: { id: userId } });
-      if (!user) throw new Error('This user doesn\'t exist');
-      if (user.id === team.owner.id) {
-        throw new Error('The owner of the team cannot be removed');
-      }
-      team.members = team.members.filter(member => member.id !== user.id);
-      await team.save();
-
-      return true;
-    } catch (err) {
-      console.log(err);
-      return err;
+    const user = await User.findOne({ where: { id: userId } });
+    if (!user) throw new Error('This user doesn\'t exist');
+    if (user.id === team.owner.id) {
+      throw new Error('The owner of the team cannot be removed');
     }
+    team.members = team.members.filter(member => member.id !== user.id);
+    await team.save();
+
+    return true;
   }
 
   @Mutation(() => Team)
@@ -173,13 +143,8 @@ export class TeamResolver extends TeamBaseResolver {
     @Arg('name') name: string,
     @Ctx() { entity: team }: { entity: Team }
   ) {
-    try {
-      team.name = name;
-      return await team.save();
-    } catch (err) {
-      console.log(err);
-      return err;
-    }
+    team.name = name;
+    return await team.save();
   }
 
   @Mutation(() => Team)
@@ -188,14 +153,9 @@ export class TeamResolver extends TeamBaseResolver {
     @Arg('teamId', () => ID) _teamId: number,
     @Arg('projectId', () => ID) projectId: number
   ) {
-    try {
-      const project = await Project.findOne({ where: { id: projectId } });
-      if (!project) throw new Error('This project doesn\'t exist');
-      project.team = null;
-      return await project.save();
-    } catch (err) {
-      console.log(err);
-      return err;
-    }
+    const project = await Project.findOne({ where: { id: projectId } });
+    if (!project) throw new Error('This project doesn\'t exist');
+    project.team = null;
+    return await project.save();
   }
 }
