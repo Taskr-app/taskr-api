@@ -7,19 +7,21 @@ import {
   UpdateDateColumn,
   ManyToOne,
   BeforeInsert,
-  OneToMany
+  OneToMany,
+  BeforeRemove
 } from 'typeorm';
 import { ObjectType, Field, ID } from 'type-graphql';
 import { Project } from './Project';
 import { Task } from './Task';
+import { buffer } from '../services/constants';
 
 @ObjectType()
 @Entity('lists')
 export class List extends BaseEntity {
   @BeforeInsert()
-  async generatePos() {
+  async increaseProjectMaxPos() {
     try {
-      this.project.maxPos += 16384;
+      this.project.maxPos += buffer;
       await this.project.save();
       this.pos = this.project.maxPos;
     } catch (err) {
@@ -27,6 +29,15 @@ export class List extends BaseEntity {
       return err;
     }
   }
+
+  @BeforeRemove()
+  async decreaseListMaxPos() {
+    if (this.pos === this.project.maxPos) {
+      this.project.maxPos -= buffer;
+      await this.project.save();
+    }
+  }
+
   @Field(() => ID)
   @PrimaryGeneratedColumn()
   id: number;
@@ -62,7 +73,8 @@ export class List extends BaseEntity {
   @Field(() => [Task])
   @OneToMany(
     () => Task,
-    task => task.list
+    task => task.list,
+    { cascade: ['insert', 'update'] }
   )
   tasks: Task[];
 }

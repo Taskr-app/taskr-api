@@ -9,27 +9,36 @@ import {
   ManyToOne,
   BeforeInsert,
   ManyToMany,
-  JoinTable
+  JoinTable,
+  BeforeRemove
 } from 'typeorm';
 import { List } from './List';
 import { Label } from './Label';
 import { Project } from './Project';
 import { User } from './User';
+import { buffer } from '../services/constants';
 
 @ObjectType()
 @Entity('tasks')
 export class Task extends BaseEntity {
   @BeforeInsert()
-  async generatePos() {
-    const maxPosTask = await Task.findOne({
-      order: {
-        id: 'DESC'
-      },
-      where: {
-        list: this.list.id
-      }
-    });
-    this.pos = maxPosTask ? maxPosTask.pos + 16384 : 16384;
+  async increaseListMaxPos() {
+    try {
+      this.list.maxPos += buffer;
+      await this.list.save();
+      this.pos = this.list.maxPos;
+    } catch (err) {
+      console.log(err);
+      return err;
+    }
+  }
+
+  @BeforeRemove()
+  async decreaseListMaxPos() {
+    if (this.pos === this.list.maxPos) {
+      this.list.maxPos -= buffer;
+      await this.list.save();
+    }
   }
 
   @Field(() => ID)
@@ -63,7 +72,6 @@ export class Task extends BaseEntity {
     () => List,
     list => list.tasks,
     {
-      cascade: ['insert', 'update'],
       onDelete: 'CASCADE',
       nullable: false
     }
@@ -88,7 +96,7 @@ export class Task extends BaseEntity {
     () => User,
     user => user.tasks,
     {
-      eager: true
+      // eager: true
     }
   )
   @JoinTable()

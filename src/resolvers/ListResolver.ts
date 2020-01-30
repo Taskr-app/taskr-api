@@ -9,15 +9,16 @@ import {
   PubSub,
   Subscription,
   Root,
-  Query
+  Query,
+  Publisher
 } from 'type-graphql';
 import { List } from '../entity/List';
 import { Project } from '../entity/Project';
 import { createQueryBuilder } from 'typeorm';
 import { isAuth } from './middleware/isAuth';
+import { buffer } from '../services/constants';
 
 const ListBaseResolver = createBaseResolver('List', List);
-const buffer = 16384;
 
 const topics = {
   create: 'CREATE_LIST',
@@ -52,8 +53,8 @@ export class ListResolver extends ListBaseResolver {
   @Mutation(() => List)
   @UseMiddleware(isAuth)
   async deleteList(
-    @Arg('id', () => ID) id: string,
-    @PubSub() pubSub: PubSubEngine
+    @PubSub(topics.delete) publish: Publisher<List>,
+    @Arg('id', () => ID) id: string
   ) {
     const list = await List.findOne({
       where: { id },
@@ -62,7 +63,7 @@ export class ListResolver extends ListBaseResolver {
     if (!list) {
       throw new Error('Could not find List');
     }
-    await pubSub.publish(topics.delete, list);
+    await publish(list);
     list.remove();
     return list;
   }
@@ -135,7 +136,7 @@ export class ListResolver extends ListBaseResolver {
   @Mutation(() => Boolean)
   @UseMiddleware(isAuth)
   async updateListPos(
-    @PubSub() pubSub: PubSubEngine,
+    @PubSub(topics.move) publish: Publisher<List>,
     @Arg('id', () => ID) id: string,
     @Arg('aboveId', () => ID, { nullable: true }) aboveId?: string,
     @Arg('belowId', () => ID, { nullable: true }) belowId?: string
@@ -143,53 +144,121 @@ export class ListResolver extends ListBaseResolver {
     if (aboveId === undefined && belowId === undefined) {
       return false;
     }
-    const targetList = await List.findOne({
-      relations: ['project'],
-      where: { id }
-    });
-    if (!targetList) {
-      throw new Error('List does not exist');
-    }
-
-    // move target to bottom of list
-    if (belowId === undefined) {
-      targetList.pos = targetList.project.maxPos + buffer;
-    }
-
-    // move target to top of list
-    else if (aboveId === undefined) {
-      // get pos of first list
-      const firstList = targetList.project.lists.find(list => {
-        return list.id === parseInt(belowId);
+    try {
+      const targetList = await List.findOne({
+        relations: ['project'],
+        where: { id }
       });
-      if (!firstList) {
-        throw new Error('First list does not exist');
-      }
-      targetList.pos = firstList.pos / 2;
-    }
-
-    // move target between aboveList and belowList
-    else {
-      const aboveList = targetList.project.lists.find(
-        list => list.id === parseInt(aboveId!)
-      );
-      if (!aboveList) {
-        throw new Error('List above does not exist');
-      }
-      const belowList = targetList.project.lists.find(
-        list => list.id === parseInt(belowId!)
-      );
-      if (!belowList) {
-        throw new Error('List below does not exist');
+      if (!targetList) {
+        throw new Error('List does not exist');
       }
 
-      targetList.pos = (aboveList.pos + belowList.pos) / 2;
+      // move target to bottom of list
+      if (belowId === undefined) {
+        targetList.pos = targetList.project.maxPos + buffer;
+      }
+
+      // move target to top of list
+      else if (aboveId === undefined) {
+        // get pos of first list
+        const firstList = targetList.project.lists.find(list => {
+          return list.id === parseInt(belowId);
+        });
+        if (!firstList) {
+          throw new Error('First list does not exist');
+        }
+        targetList.pos = firstList.pos / 2;
+      }
+
+      // move target to bottom of list
+      if (belowId === undefined) {
+        targetList.pos = targetList.project.maxPos + buffer;
+        targetList.project.maxPos = targetList.pos;
+        await targetList.project.save();
+      }
+
+      // move target to top of list
+      else if (aboveId === undefined && belowId) {
+        const firstList = targetList.project.lists.find(list => {
+          return list.id === parseInt(belowId);
+        });
+        if (!firstList) {
+          throw new Error('First list does not exist');
+        }
+        targetList.pos =
+          Math.round((firstList.pos / 2 + Number.EPSILON) * 1) / 1;
+
+        if (firstList.pos <= 1) {
+          let counter = 1;
+          targetList.project.lists.forEach(list => {
+            if (list.id === targetList.id) {
+              list.pos = buffer;
+            } else {
+              list.pos = buffer * counter + buffer;
+              counter += 1;
+            }
+          });
+          await targetList.project.save();
+        }
+      }
+
+      // move target between two lists
+      else {
+        const aboveList = targetList.project.lists.find(
+          list => list.id === parseInt(aboveId!)
+        );
+        if (!aboveList) {
+          throw new Error('List above does not exist');
+        }
+        const belowList = targetList.project.lists.find(
+          list => list.id === parseInt(belowId!)
+        );
+        if (!belowList) {
+          throw new Error('List below does not exist');
+        }
+
+        if (aboveList.pos === belowList.pos) {
+          throw new Error('Neighbor lists have same position values');
+        }
+
+        // pos collision handling (between two lists)
+        if (Math.abs(aboveList.pos - belowList.pos) <= 1) {
+          targetList.pos = Math.ceil(belowList.pos + buffer);
+          belowList.pos = Math.ceil(targetList.pos + buffer * 2);
+
+          let targetFound = false;
+          targetList.project.lists.forEach(list => {
+            if (
+              targetFound &&
+              !(list.id === targetList.id) &&
+              !(list.id === aboveList.id) &&
+              belowList.pos > list.pos
+            ) {
+              list.pos = Math.ceil(list.pos + buffer * 2);
+              if (list.pos > targetList.project.maxPos) {
+                targetList.project.maxPos = list.pos;
+              }
+            }
+            if (list.id === belowList.id) {
+              targetFound = true;
+            }
+          });
+        } else {
+          targetList.pos =
+            Math.round(
+              ((aboveList.pos + belowList.pos) / 2 + Number.EPSILON) * 1
+            ) / 1;
+        }
+        await targetList.project.save();
+      }
+
+      await targetList.save();
+      await publish(targetList);
+      return true;
+    } catch (err) {
+      console.log(err);
+      return err;
     }
-    // TODO check if pos numbers get too close to each other .0001 apart or smth
-    // renumber the cards and nearby cards
-    await targetList.save();
-    await pubSub.publish(topics.move, targetList);
-    return true;
   }
 
   @Query(() => [List])
