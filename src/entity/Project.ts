@@ -56,6 +56,7 @@ export class Project extends BaseEntity {
     () => List,
     list => list.project,
     {
+      onDelete: 'CASCADE',
       cascade: true,
       eager: true
     }

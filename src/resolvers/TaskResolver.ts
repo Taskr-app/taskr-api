@@ -17,6 +17,7 @@ import { isAuth } from './middleware';
 import { User } from '../entity/User';
 import { uniqBy } from 'lodash';
 import { createQueryBuilder } from 'typeorm';
+import { buffer } from '../services/constants';
 
 const topics = {
   create: 'CREATE_TASK',
@@ -26,8 +27,6 @@ const topics = {
   removeMember: 'REMOVE_TASK_MEMBER',
   move: 'MOVE_TASK'
 };
-
-const buffer = 16384;
 
 @Resolver()
 export class TaskResolver {
@@ -118,14 +117,8 @@ export class TaskResolver {
       targetTask.list = newList;
     }
 
-    // move target to bottom of list or to a list with no tasks
-    if (belowId === undefined) {
-      targetTask.pos = targetTask.list.maxPos + buffer;
-      targetTask.list.maxPos = targetTask.pos;
-    }
-
     // move target to top of list
-    else if (aboveId === undefined) {
+    else if (aboveId === undefined && belowId) {
       targetTask.list.tasks = await createQueryBuilder(Task, 'task')
         .where('"task"."listId" = :id', { id: targetTask.list.id })
         .getMany();
@@ -136,10 +129,42 @@ export class TaskResolver {
       if (!firstTask) {
         throw new Error('First task does not exist');
       }
+      // move target to bottom of list or to a list with no tasks
+      if (belowId === undefined) {
+        targetTask.pos = targetTask.list.maxPos + buffer;
+        targetTask.list.maxPos = targetTask.pos;
+        await targetTask.list.save();
+      }
       targetTask.pos = firstTask.pos / 2;
     }
 
-    // move target between aboveTask and belowTask
+    // move target to top of list
+    else if (aboveId === undefined && belowId) {
+      targetTask.list.tasks = await createQueryBuilder(Task, 'task')
+        .where('"task"."listId" = :id', { id: targetTask.list.id })
+        .orderBy('task.pos', 'ASC')
+        .getMany();
+
+      const firstTask = targetTask.list.tasks[0];
+
+      targetTask.pos = Math.round((firstTask.pos / 2 + Number.EPSILON) * 1) / 1;
+
+      // pos collision handling
+      if (firstTask.pos <= 1) {
+        let counter = 1;
+        targetTask.list.tasks.forEach(task => {
+          if (task.id === targetTask.id) {
+            task.pos = buffer;
+          } else {
+            task.pos = buffer * counter + buffer;
+            counter += 1;
+          }
+        });
+        await targetTask.list.save();
+      }
+    }
+
+    // move target between two tasks
     else {
       targetTask.list.tasks = await createQueryBuilder(Task, 'task')
         .where('"task"."listId" = :id', { id: targetTask.list.id })
@@ -157,10 +182,43 @@ export class TaskResolver {
         throw new Error('Task below does not exist');
       }
 
-      targetTask.pos = (aboveTask.pos + belowTask.pos) / 2;
+      if (aboveTask.pos === belowTask.pos) {
+        throw new Error('Neighbor tasks have same position values');
+      }
+
+      // pos collision handling (between two cards)
+      // target: (below + buffer)
+      // below: (target + buffer*2)
+      // rest: (rest + buffer*2)
+      if (Math.abs(aboveTask.pos - belowTask.pos) <= 1) {
+        targetTask.pos = Math.ceil(belowTask.pos + buffer);
+        belowTask.pos = Math.ceil(targetTask.pos + buffer * 2);
+
+        let targetFound = false;
+        targetTask.list.tasks.forEach(task => {
+          if (
+            targetFound &&
+            !(task.id === targetTask.id) &&
+            !(task.id === aboveTask.id) &&
+            belowTask.pos > task.pos
+          ) {
+            task.pos = Math.ceil(task.pos + buffer * 2);
+            if (task.pos > targetTask.list.maxPos) {
+              targetTask.list.maxPos = task.pos;
+            }
+          }
+          if (task.id === belowTask.id) {
+            targetFound = true;
+          }
+        });
+      } else {
+        targetTask.pos =
+          Math.round(
+            ((aboveTask.pos + belowTask.pos) / 2 + Number.EPSILON) * 1
+          ) / 1;
+      }
+      await targetTask.list.save();
     }
-    // TODO check if pos numbers get too close to each other .0001 apart or smth
-    // renumber the cards and nearby cards
 
     await targetTask.save();
     await publish(targetTask);
@@ -238,11 +296,11 @@ export class TaskResolver {
 
   @Subscription(() => Task, {
     topics: topics.update,
-    filter: ({ payload, args }) => args.taskId === payload.id
+    filter: ({ payload, args }) => parseInt(args.taskId) === payload.id
   })
-  updatedTask(
+  onTaskUpdated(
     @Root() updatedTask: Task,
-    @Arg('taskId', () => Int) _taskId: number
+    @Arg('taskId', () => ID) _taskId: string
   ) {
     return updatedTask;
   }
