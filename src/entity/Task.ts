@@ -72,6 +72,7 @@ export class Task extends BaseEntity {
     () => List,
     list => list.tasks,
     {
+      eager: false,
       onDelete: 'CASCADE',
       nullable: false
     }
