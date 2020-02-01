@@ -56,16 +56,16 @@ export class ListResolver extends ListBaseResolver {
     @PubSub(topics.delete) publish: Publisher<List>,
     @Arg('id', () => ID) id: string
   ) {
-    const list = await List.findOne({
-      where: { id },
-      relations: ['project']
-    });
-    if (!list) {
-      throw new Error('Could not find List');
-    }
-    await publish(list);
-    list.remove();
-    return list;
+      const list = await createQueryBuilder(List, 'list')
+        .leftJoinAndSelect('list.project', 'project')
+        .where('"list"."id" = :id', { id })
+        .getOne();
+      if (!list) {
+        throw new Error('Could not find List');
+      }
+      await publish(list);
+      await list.remove();
+      return list;
   }
 
   @Subscription({
@@ -145,13 +145,23 @@ export class ListResolver extends ListBaseResolver {
       return false;
     }
     try {
-      const targetList = await List.findOne({
-        relations: ['project'],
-        where: { id }
-      });
+      if (aboveId === undefined && belowId === undefined) {
+        return false;
+      }
+      // const targetList = await List.findOne({
+      //   relations: ['project'],
+      //   where: { id }
+      // });
+      const targetList = await createQueryBuilder(List, 'list')
+        .leftJoinAndSelect('list.project', 'project')
+        .where('"list"."id" = :id', { id })
+        .getOne();
+
       if (!targetList) {
         throw new Error('List does not exist');
       }
+      console.log('list', targetList);
+      console.log('project of list', targetList.project);
 
       // move target to bottom of list
       if (belowId === undefined) {
@@ -179,12 +189,13 @@ export class ListResolver extends ListBaseResolver {
 
       // move target to top of list
       else if (aboveId === undefined && belowId) {
-        const firstList = targetList.project.lists.find(list => {
-          return list.id === parseInt(belowId);
-        });
-        if (!firstList) {
-          throw new Error('First list does not exist');
-        }
+        targetList.project.lists = await createQueryBuilder(List, 'list')
+          .where('"list"."projectId" = :id', { id: targetList.project.id })
+          .orderBy('list.pos', 'ASC')
+          .getMany();
+
+        const firstList = targetList.project.lists[0];
+
         targetList.pos =
           Math.round((firstList.pos / 2 + Number.EPSILON) * 1) / 1;
 
@@ -204,19 +215,22 @@ export class ListResolver extends ListBaseResolver {
 
       // move target between two lists
       else {
-        const aboveList = targetList.project.lists.find(
-          list => list.id === parseInt(aboveId!)
-        );
-        if (!aboveList) {
-          throw new Error('List above does not exist');
-        }
-        const belowList = targetList.project.lists.find(
-          list => list.id === parseInt(belowId!)
-        );
-        if (!belowList) {
-          throw new Error('List below does not exist');
-        }
+        targetList.project.lists = await createQueryBuilder(List, 'list')
+          .where('"list"."projectId" = :id', { id: targetList.project.id })
+          .orderBy('list.pos', 'ASC')
+          .getMany();
 
+        let aboveList: undefined | List;
+        let belowList: undefined | List;
+        for (let i = 0; i < targetList.project.lists.length - 1; i += 1) {
+          if (targetList.project.lists[i].id === parseInt(aboveId!)) {
+            aboveList = targetList.project.lists[i];
+            belowList = targetList.project.lists[i + 1];
+            break;
+          }
+        }
+        if (!aboveList) throw new Error('Task above does not exist');
+        if (!belowList) throw new Error('Task below does not exist');
         if (aboveList.pos === belowList.pos) {
           throw new Error('Neighbor lists have same position values');
         }
@@ -231,15 +245,15 @@ export class ListResolver extends ListBaseResolver {
             if (
               targetFound &&
               !(list.id === targetList.id) &&
-              !(list.id === aboveList.id) &&
-              belowList.pos > list.pos
+              !(list.id === aboveList!.id) &&
+              belowList!.pos > list.pos
             ) {
               list.pos = Math.ceil(list.pos + buffer * 2);
               if (list.pos > targetList.project.maxPos) {
                 targetList.project.maxPos = list.pos;
               }
             }
-            if (list.id === belowList.id) {
+            if (list.id === belowList!.id) {
               targetFound = true;
             }
           });

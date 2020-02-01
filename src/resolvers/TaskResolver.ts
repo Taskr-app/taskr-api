@@ -98,26 +98,25 @@ export class TaskResolver {
     @Arg('aboveId', () => ID, { nullable: true }) aboveId?: string,
     @Arg('belowId', () => ID, { nullable: true }) belowId?: string
   ) {
+    const targetTask = await createQueryBuilder(Task, 'task')
+      .leftJoinAndSelect('task.list', 'list')
+      .where('"task"."id" = :id', { id })
+      .getOne();
 
-      const targetTask = await createQueryBuilder(Task, 'task')
-        .where('"task"."id" = :id', { id })
-        .leftJoinAndSelect('task.list', 'list')
-        .getOne();
+    if (!targetTask) {
+      throw new Error('Task does not exist');
+    }
+    if (listId) {
+      const newList = await List.findOne({
+        relations: ['tasks'],
+        where: { id: listId }
+      });
 
-      if (!targetTask) {
-        throw new Error('Task does not exist');
+      if (!newList) {
+        throw new Error('List does not exist');
       }
-      if (listId) {
-        const newList = await List.findOne({
-          relations: ['tasks'],
-          where: { id: listId }
-        });
-        
-        if (!newList) {
-          throw new Error('List does not exist');
-        }
-        targetTask.list = newList;
-        }
+      targetTask.list = newList;
+    }
 
     // move target to top of list
     else if (aboveId === undefined && belowId) {
@@ -152,14 +151,14 @@ export class TaskResolver {
       targetTask.pos = firstTask.pos / 2;
     }
 
-      // move target to top of list
-      else if (aboveId === undefined && belowId) {
-        targetTask.list.tasks = await createQueryBuilder(Task, 'task')
-          .where('"task"."listId" = :id', { id: targetTask.list.id })
-          .orderBy('task.pos', 'ASC')
-          .getMany();
+    // move target to top of list
+    else if (aboveId === undefined && belowId) {
+      targetTask.list.tasks = await createQueryBuilder(Task, 'task')
+        .where('"task"."listId" = :id', { id: targetTask.list.id })
+        .orderBy('task.pos', 'ASC')
+        .getMany();
 
-        const firstTask = targetTask.list.tasks[0];
+      const firstTask = targetTask.list.tasks[0];
 
       targetTask.pos = Math.round((firstTask.pos / 2 + Number.EPSILON) * 1) / 1;
 
@@ -178,54 +177,58 @@ export class TaskResolver {
       }
     }
 
-      // move target between two tasks
-      else {
-        targetTask.list.tasks = await createQueryBuilder(Task, 'task')
-          .where('"task"."listId" = :id', { id: targetTask.list.id })
-          .getMany();
-        const aboveTask = targetTask.list.tasks.find(
-          task => task.id === parseInt(aboveId!)
-        );
-        if (!aboveTask) throw new Error('Task above does not exist');
+    // move target between two tasks
+    else {
+      targetTask.list.tasks = await createQueryBuilder(Task, 'task')
+        .where('"task"."listId" = :id', { id: targetTask.list.id })
+        .orderBy('task.pos', 'ASC')
+        .getMany();
 
-        const belowTask = targetTask.list.tasks.find(
-          task => task.id === parseInt(belowId!)
-        );
-        if (!belowTask) throw new Error('Task below does not exist');
-        if (aboveTask.pos === belowTask.pos)
-          throw new Error('Neighbor tasks have same position values');
+      let aboveTask: undefined | Task;
+      let belowTask: undefined | Task;
+      for (let i = 0; i < targetTask.list.tasks.length - 1; i += 1) {
+        if (targetTask.list.tasks[i].id === parseInt(aboveId!)) {
+          aboveTask = targetTask.list.tasks[i];
+          belowTask = targetTask.list.tasks[i + 1];
+          break;
+        }
+      }
+      if (!aboveTask) throw new Error('Task above does not exist');
+      if (!belowTask) throw new Error('Task below does not exist');
+      if (aboveTask.pos === belowTask.pos)
+        throw new Error('Neighbor tasks have same position values');
 
-        // pos collision handling (between two cards)
-        // target: (below + buffer) | below: (target + buffer*2) | rest: (rest + buffer*2)
-        if (Math.abs(aboveTask.pos - belowTask.pos) <= 1) {
-          targetTask.pos = Math.ceil(belowTask.pos + buffer);
-          belowTask.pos = Math.ceil(targetTask.pos + buffer * 2);
+      // pos collision handling (between two cards)
+      // target: (below + buffer) | below: (target + buffer*2) | rest: (rest + buffer*2)
+      if (Math.abs(aboveTask.pos - belowTask.pos) <= 1) {
+        targetTask.pos = Math.ceil(belowTask.pos + buffer);
+        belowTask.pos = Math.ceil(targetTask.pos + buffer * 2);
 
         let targetFound = false;
         targetTask.list.tasks.forEach(task => {
           if (
             targetFound &&
             !(task.id === targetTask.id) &&
-            !(task.id === aboveTask.id) &&
-            belowTask.pos > task.pos
+            !(task.id === aboveTask!.id) &&
+            belowTask!.pos > task.pos
           ) {
             task.pos = Math.ceil(task.pos + buffer * 2);
             if (task.pos > targetTask.list.maxPos) {
               targetTask.list.maxPos = task.pos;
             }
           }
-          });
-          await targetTask.list.save();
-        } else {
-          targetTask.pos =
-            Math.round(
-              ((aboveTask.pos + belowTask.pos) / 2 + Number.EPSILON) * 1
-            ) / 1;
-        }
+        });
+        await targetTask.list.save();
+      } else {
+        targetTask.pos =
+          Math.round(
+            ((aboveTask.pos + belowTask.pos) / 2 + Number.EPSILON) * 1
+          ) / 1;
       }
-      await targetTask.save();
-      await publish(targetTask);
-      return true;
+    }
+    await targetTask.save();
+    await publish(targetTask);
+    return true;
   }
 
   @Mutation(() => Boolean)
