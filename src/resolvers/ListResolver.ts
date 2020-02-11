@@ -10,7 +10,9 @@ import {
   Subscription,
   Root,
   Query,
-  Publisher
+  Publisher,
+  ArgsType,
+  Field
 } from 'type-graphql';
 import { List } from '../entity/List';
 import { Project } from '../entity/Project';
@@ -26,6 +28,14 @@ const topics = {
   delete: 'DELETE_LIST',
   move: 'MOVE_LIST'
 };
+
+@ArgsType()
+class PublisherPayloadArgs {
+  @Field(() => [List])
+  lists: List[];
+  @Field(() => ID)
+  projectId: number;
+}
 
 @Resolver()
 export class ListResolver extends ListBaseResolver {
@@ -56,16 +66,16 @@ export class ListResolver extends ListBaseResolver {
     @PubSub(topics.delete) publish: Publisher<List>,
     @Arg('id', () => ID) id: string
   ) {
-      const list = await createQueryBuilder(List, 'list')
-        .leftJoinAndSelect('list.project', 'project')
-        .where('"list"."id" = :id', { id })
-        .getOne();
-      if (!list) {
-        throw new Error('Could not find List');
-      }
-      await publish(list);
-      await list.remove();
-      return list;
+    const list = await createQueryBuilder(List, 'list')
+      .leftJoinAndSelect('list.project', 'project')
+      .where('"list"."id" = :id', { id })
+      .getOne();
+    if (!list) {
+      throw new Error('Could not find List');
+    }
+    await publish(list);
+    await list.remove();
+    return list;
   }
 
   @Subscription({
@@ -105,17 +115,28 @@ export class ListResolver extends ListBaseResolver {
     return list;
   }
 
-  @Subscription({
+  @Subscription(() => [List], {
     topics: topics.move,
-    filter: ({ payload, args }) => {
-      if (!payload.project) {
-        throw new Error('no payload project');
+    filter: ({
+      payload,
+      args
+    }: {
+      payload: PublisherPayloadArgs;
+      args: { projectId: string };
+    }) => {
+      try {
+        return payload.projectId === parseInt(args.projectId);
+      } catch (err) {
+        console.log(err);
+        return false;
       }
-      return payload.project.id === parseInt(args.projectId);
     }
   })
-  onListMoved(@Root() list: List, @Arg('projectId', () => ID) _: string): List {
-    return list;
+  onListMoved(
+    @Root() payload: PublisherPayloadArgs,
+    @Arg('projectId', () => ID) _: string
+  ): List[] {
+    return payload.lists;
   }
 
   @Mutation(() => Boolean)
@@ -133,10 +154,10 @@ export class ListResolver extends ListBaseResolver {
     return true;
   }
 
-  @Mutation(() => Boolean)
+  @Mutation(() => [List])
   @UseMiddleware(isAuth)
   async updateListPos(
-    @PubSub(topics.move) publish: Publisher<List>,
+    @PubSub(topics.move) publish: Publisher<PublisherPayloadArgs>,
     @Arg('id', () => ID) id: string,
     @Arg('aboveId', () => ID, { nullable: true }) aboveId?: string,
     @Arg('belowId', () => ID, { nullable: true }) belowId?: string
@@ -148,10 +169,6 @@ export class ListResolver extends ListBaseResolver {
       if (aboveId === undefined && belowId === undefined) {
         return false;
       }
-      // const targetList = await List.findOne({
-      //   relations: ['project'],
-      //   where: { id }
-      // });
       const targetList = await createQueryBuilder(List, 'list')
         .leftJoinAndSelect('list.project', 'project')
         .where('"list"."id" = :id', { id })
@@ -160,8 +177,7 @@ export class ListResolver extends ListBaseResolver {
       if (!targetList) {
         throw new Error('List does not exist');
       }
-      console.log('list', targetList);
-      console.log('project of list', targetList.project);
+      let publishLists: List[] = [];
 
       // move target to bottom of list
       if (belowId === undefined) {
@@ -185,6 +201,7 @@ export class ListResolver extends ListBaseResolver {
         targetList.pos = targetList.project.maxPos + buffer;
         targetList.project.maxPos = targetList.pos;
         await targetList.project.save();
+        publishLists = [targetList];
       }
 
       // move target to top of list
@@ -193,13 +210,15 @@ export class ListResolver extends ListBaseResolver {
           .where('"list"."projectId" = :id', { id: targetList.project.id })
           .orderBy('list.pos', 'ASC')
           .getMany();
-
         const firstList = targetList.project.lists[0];
 
         targetList.pos =
           Math.round((firstList.pos / 2 + Number.EPSILON) * 1) / 1;
+        publishLists = [targetList];
 
+        // collision handling
         if (firstList.pos <= 1) {
+          targetList.pos = buffer;
           let counter = 1;
           targetList.project.lists.forEach(list => {
             if (list.id === targetList.id) {
@@ -210,6 +229,7 @@ export class ListResolver extends ListBaseResolver {
             }
           });
           await targetList.project.save();
+          publishLists = targetList.project.lists;
         }
       }
 
@@ -257,18 +277,20 @@ export class ListResolver extends ListBaseResolver {
               targetFound = true;
             }
           });
+          publishLists = targetList.project.lists;
         } else {
           targetList.pos =
             Math.round(
               ((aboveList.pos + belowList.pos) / 2 + Number.EPSILON) * 1
             ) / 1;
+          publishLists = [targetList];
         }
         await targetList.project.save();
       }
 
       await targetList.save();
-      await publish(targetList);
-      return true;
+      await publish({ projectId: targetList.project.id, lists: publishLists });
+      return publishLists;
     } catch (err) {
       console.log(err);
       return err;
