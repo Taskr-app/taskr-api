@@ -9,7 +9,9 @@ import {
   Root,
   Publisher,
   Int,
-  Query
+  Query,
+  Field,
+  ArgsType
 } from 'type-graphql';
 import { Task } from '../entity/Task';
 import { List } from '../entity/List';
@@ -27,6 +29,14 @@ const topics = {
   removeMember: 'REMOVE_TASK_MEMBER',
   move: 'MOVE_TASK'
 };
+
+@ArgsType()
+class PublisherPayloadArgs {
+  @Field(() => [Task])
+  tasks: Task[];
+  @Field(() => ID)
+  listId: number;
+}
 
 @Resolver()
 export class TaskResolver {
@@ -89,10 +99,10 @@ export class TaskResolver {
     return newTask;
   }
 
-  @Mutation(() => Boolean)
+  @Mutation(() => [Task])
   @UseMiddleware(isAuth)
   async updateTaskPos(
-    @PubSub(topics.move) publish: Publisher<Task>,
+    @PubSub(topics.move) publish: Publisher<PublisherPayloadArgs>,
     @Arg('id', () => ID) id: string,
     @Arg('listId', () => ID, { nullable: true }) listId?: string,
     @Arg('aboveId', () => ID, { nullable: true }) aboveId?: string,
@@ -106,6 +116,7 @@ export class TaskResolver {
     if (!targetTask) {
       throw new Error('Task does not exist');
     }
+    let publishTasks = [];
     if (listId) {
       const newList = await List.findOne({
         relations: ['tasks'],
@@ -115,40 +126,51 @@ export class TaskResolver {
       if (!newList) {
         throw new Error('List does not exist');
       }
+    }
+    const movingToAnotherList =
+      listId && targetTask.list.id !== parseInt(listId);
+
+    // If task is moving to another list
+    if (movingToAnotherList) {
+      publishTasks.push(targetTask);
+      targetTask.list.tasks = await createQueryBuilder(Task, 'task')
+        .where('"task"."listId" = :id', { id: targetTask.list.id })
+        .orderBy('task.pos', 'ASC')
+        .getMany();
+
+      // fix maxPos of list that the task is moving away from
+      targetTask.list.tasks.length <= 1
+        ? (targetTask.list.maxPos = 0)
+        : (targetTask.list.maxPos =
+            targetTask.list.tasks[targetTask.list.tasks.length - 2].pos);
+      await targetTask.list.save();
+
+      const newList = await createQueryBuilder(List, 'list')
+        .where('"list"."id" = :listId', { listId })
+        .leftJoinAndSelect('list.tasks', 'task')
+        .orderBy('list.pos, task.pos', 'ASC')
+        .getOne();
+      if (!newList) {
+        throw new Error('List does not exist');
+      }
+      if (!targetTask.list.tasks) {
+        throw new Error('Task does not exist');
+      }
+      // publish tasks in list that the task is moving away from
+      publish({
+        listId: targetTask.list.id,
+        tasks: targetTask.list.tasks.filter(task => task.id !== parseInt(id))
+      });
       targetTask.list = newList;
     }
 
-    // move target to top of list
-    else if (aboveId === undefined && belowId) {
-      targetTask.list.tasks = await createQueryBuilder(Task, 'task')
-        .where('"task"."listId" = :id', { id: targetTask.list.id })
-        .getMany();
-      // get pos of first task
-      const firstTask = targetTask.list.tasks.find(task => {
-        return task.id === parseInt(belowId);
-      });
-      if (!firstTask) {
-        throw new Error('First task does not exist');
-      }
-      // task moving to another list
-      if (listId && targetTask.list.id !== parseInt(listId)) {
-        const newList = await createQueryBuilder(List, 'list')
-          .where('"list"."id" = :listId', { listId })
-          .leftJoinAndSelect('list.tasks', 'task')
-          .orderBy('list.pos, task.pos', 'ASC')
-          .getOne();
-        if (!newList) {
-          throw new Error('List does not exist');
-        }
-        targetTask.list = newList;
-      }
-      // move target to bottom of list or to a list with no tasks
-      if (belowId === undefined) {
-        targetTask.pos = targetTask.list.maxPos + buffer;
-        targetTask.list.maxPos = targetTask.pos;
-        await targetTask.list.save();
-      }
-      targetTask.pos = firstTask.pos / 2;
+    // move target to bottom of list or to a list with no tasks
+    if (belowId === undefined) {
+      // if list has no task, maxPos should be buffer
+      targetTask.pos = targetTask.list.maxPos + buffer;
+      targetTask.list.maxPos = targetTask.pos;
+      await targetTask.list.save();
+      // targetTask.pos = firstTask.pos / 2
     }
 
     // move target to top of list
@@ -162,7 +184,7 @@ export class TaskResolver {
 
       targetTask.pos = Math.round((firstTask.pos / 2 + Number.EPSILON) * 1) / 1;
 
-      // pos collision handling
+      // collision handling
       if (firstTask.pos <= 1) {
         let counter = 1;
         targetTask.list.tasks.forEach(task => {
@@ -216,19 +238,21 @@ export class TaskResolver {
             if (task.pos > targetTask.list.maxPos) {
               targetTask.list.maxPos = task.pos;
             }
+          } else {
+            targetTask.pos =
+              Math.round(
+                ((aboveTask!.pos + belowTask!.pos) / 2 + Number.EPSILON) * 1
+              ) / 1;
           }
         });
         await targetTask.list.save();
-      } else {
-        targetTask.pos =
-          Math.round(
-            ((aboveTask.pos + belowTask.pos) / 2 + Number.EPSILON) * 1
-          ) / 1;
       }
     }
+
+    publishTasks.push(...targetTask.list.tasks);
     await targetTask.save();
-    await publish(targetTask);
-    return true;
+    await publish({ listId: targetTask.list.id, tasks: publishTasks });
+    return publishTasks;
   }
 
   @Mutation(() => Boolean)
@@ -311,17 +335,28 @@ export class TaskResolver {
     return updatedTask;
   }
 
-  @Subscription({
+  @Subscription(() => [Task], {
     topics: topics.move,
-    filter: ({ payload, args }) => {
-      if (!payload.list) {
-        throw new Error('payload.list doesnt exist');
+    filter: ({
+      payload,
+      args
+    }: {
+      payload: PublisherPayloadArgs;
+      args: { listId: string };
+    }) => {
+      try {
+        return payload.listId === parseInt(args.listId);
+      } catch (err) {
+        console.log(err);
+        return false;
       }
-      return payload.list.id === parseInt(args.listId);
     }
   })
-  onTaskMoved(@Root() task: Task, @Arg('listId', () => ID) _: string): Task {
-    return task;
+  onTaskMoved(
+    @Root() payload: PublisherPayloadArgs,
+    @Arg('listId', () => ID) _: string
+  ): Task[] {
+    return payload.tasks;
   }
 
   @Subscription(() => Task, {
