@@ -11,7 +11,9 @@ import {
   Int,
   Query,
   Field,
-  ArgsType
+  ArgsType,
+  Args,
+  InputType
 } from 'type-graphql';
 import { Task } from '../entity/Task';
 import { List } from '../entity/List';
@@ -19,7 +21,6 @@ import { isAuth } from './middleware';
 import { User } from '../entity/User';
 import { uniqBy } from 'lodash';
 import { createQueryBuilder } from 'typeorm';
-import { buffer } from '../services/constants';
 
 const topics = {
   create: 'CREATE_TASK',
@@ -31,11 +32,38 @@ const topics = {
 };
 
 @ArgsType()
-class PublisherPayloadArgs {
-  @Field(() => [Task])
-  tasks: Task[];
+class PublishTasksArgs {
+  @Field(() => TasksIdAndPosAndList)
+  taskMoved: TasksIdAndPosAndList;
+
+  @Field(() => [TaskIdAndPos])
+  moreTasks?: TaskIdAndPos[];
+}
+
+@InputType()
+class TaskIdAndPos {
   @Field(() => ID)
-  listId: number;
+  id: string;
+  @Field()
+  pos: number;
+}
+
+@InputType()
+class TasksIdAndPosAndList extends TaskIdAndPos {
+  @Field(() => ID, { nullable: true })
+  listId?: string;
+}
+
+@ArgsType()
+class UpdateTaskArgs {
+  @Field(() => TasksIdAndPosAndList)
+  taskMoved: TasksIdAndPosAndList;
+
+  @Field(() => [TaskIdAndPos], { nullable: true })
+  moreTasks?: TaskIdAndPos[];
+
+  @Field({ nullable: true })
+  maxPos?: number;
 }
 
 @Resolver()
@@ -99,160 +127,61 @@ export class TaskResolver {
     return newTask;
   }
 
-  @Mutation(() => [Task])
+  @Mutation(() => Boolean)
   @UseMiddleware(isAuth)
-  async updateTaskPos(
-    @PubSub(topics.move) publish: Publisher<PublisherPayloadArgs>,
-    @Arg('id', () => ID) id: string,
-    @Arg('listId', () => ID, { nullable: true }) listId?: string,
-    @Arg('aboveId', () => ID, { nullable: true }) aboveId?: string,
-    @Arg('belowId', () => ID, { nullable: true }) belowId?: string
+  async updateTasksPos(
+    @PubSub(topics.move) publish: Publisher<PublishTasksArgs>,
+    @Args(() => UpdateTaskArgs)
+    { taskMoved, moreTasks, maxPos }: UpdateTaskArgs
   ) {
-    const targetTask = await createQueryBuilder(Task, 'task')
-      .leftJoinAndSelect('task.list', 'list')
-      .where('"task"."id" = :id', { id })
-      .getOne();
-
-    if (!targetTask) {
-      throw new Error('Task does not exist');
-    }
-    let publishTasks = [];
-    if (listId) {
-      const newList = await List.findOne({
-        relations: ['tasks'],
-        where: { id: listId }
-      });
-
-      if (!newList) {
-        throw new Error('List does not exist');
-      }
-    }
-    const movingToAnotherList =
-      listId && targetTask.list.id !== parseInt(listId);
-
-    // If task is moving to another list
-    if (movingToAnotherList) {
-      publishTasks.push(targetTask);
-      targetTask.list.tasks = await createQueryBuilder(Task, 'task')
-        .where('"task"."listId" = :id', { id: targetTask.list.id })
-        .orderBy('task.pos', 'ASC')
-        .getMany();
-
-      // fix maxPos of list that the task is moving away from
-      targetTask.list.tasks.length <= 1
-        ? (targetTask.list.maxPos = 0)
-        : (targetTask.list.maxPos =
-            targetTask.list.tasks[targetTask.list.tasks.length - 2].pos);
-      await targetTask.list.save();
-
-      const newList = await createQueryBuilder(List, 'list')
-        .where('"list"."id" = :listId', { listId })
-        .leftJoinAndSelect('list.tasks', 'task')
-        .orderBy('list.pos, task.pos', 'ASC')
+    let task;
+    const { id, pos, listId } = taskMoved;
+    if (maxPos) {
+      task = await createQueryBuilder(Task, 'task')
+        .leftJoinAndSelect('task.list', 'list')
+        .where('"task"."id" = :id', { id })
         .getOne();
-      if (!newList) {
+    } else {
+      task = await createQueryBuilder(Task, 'task')
+        .where('"task"."id" = :id', { id })
+        .getOne();
+    }
+    if (!task) throw new Error(`Task with id ${id} does not exist`);
+    task.pos = pos;
+    if (listId) {
+      const listToMoveTo = await createQueryBuilder(List, 'list')
+        .where('"list"."id" = :listId', { listId })
+        .orderBy('list.pos', 'ASC')
+        .getOne();
+      if (!listToMoveTo) {
         throw new Error('List does not exist');
       }
-      if (!targetTask.list.tasks) {
-        throw new Error('Task does not exist');
-      }
-      // publish tasks in list that the task is moving away from
-      publish({
-        listId: targetTask.list.id,
-        tasks: targetTask.list.tasks.filter(task => task.id !== parseInt(id))
+      task.list = listToMoveTo;
+    }
+    if (maxPos) {
+      task.list.maxPos = maxPos;
+      await task.list.save();
+    }
+    if (moreTasks) {
+      const queriedTasks = (task.list.tasks = await createQueryBuilder(
+        Task,
+        'task'
+      )
+        .where('"task"."listId" = :id', { id: task.list.id })
+        .orderBy('task.pos', 'ASC')
+        .getMany());
+      moreTasks.forEach(moreTask => {
+        const taskToBeUpdated = queriedTasks.find(
+          listTask => listTask.id === parseInt(moreTask.id)
+        );
+        taskToBeUpdated!.pos = moreTask.pos;
       });
-      targetTask.list = newList;
     }
 
-    // move target to bottom of list or to a list with no tasks
-    if (belowId === undefined) {
-      // if list has no task, maxPos should be buffer
-      targetTask.pos = targetTask.list.maxPos + buffer;
-      targetTask.list.maxPos = targetTask.pos;
-      await targetTask.list.save();
-      // targetTask.pos = firstTask.pos / 2
-    }
-
-    // move target to top of list
-    else if (aboveId === undefined && belowId) {
-      targetTask.list.tasks = await createQueryBuilder(Task, 'task')
-        .where('"task"."listId" = :id', { id: targetTask.list.id })
-        .orderBy('task.pos', 'ASC')
-        .getMany();
-
-      const firstTask = targetTask.list.tasks[0];
-
-      targetTask.pos = Math.round((firstTask.pos / 2 + Number.EPSILON) * 1) / 1;
-
-      // collision handling
-      if (firstTask.pos <= 1) {
-        let counter = 1;
-        targetTask.list.tasks.forEach(task => {
-          if (task.id === targetTask.id) {
-            task.pos = buffer;
-          } else {
-            task.pos = buffer * counter + buffer;
-            counter += 1;
-          }
-        });
-        await targetTask.list.save();
-      }
-    }
-
-    // move target between two tasks
-    else {
-      targetTask.list.tasks = await createQueryBuilder(Task, 'task')
-        .where('"task"."listId" = :id', { id: targetTask.list.id })
-        .orderBy('task.pos', 'ASC')
-        .getMany();
-
-      let aboveTask: undefined | Task;
-      let belowTask: undefined | Task;
-      for (let i = 0; i < targetTask.list.tasks.length - 1; i += 1) {
-        if (targetTask.list.tasks[i].id === parseInt(aboveId!)) {
-          aboveTask = targetTask.list.tasks[i];
-          belowTask = targetTask.list.tasks[i + 1];
-          break;
-        }
-      }
-      if (!aboveTask) throw new Error('Task above does not exist');
-      if (!belowTask) throw new Error('Task below does not exist');
-      if (aboveTask.pos === belowTask.pos)
-        throw new Error('Neighbor tasks have same position values');
-
-      // pos collision handling (between two cards)
-      // target: (below + buffer) | below: (target + buffer*2) | rest: (rest + buffer*2)
-      if (Math.abs(aboveTask.pos - belowTask.pos) <= 1) {
-        targetTask.pos = Math.ceil(belowTask.pos + buffer);
-        belowTask.pos = Math.ceil(targetTask.pos + buffer * 2);
-
-        let targetFound = false;
-        targetTask.list.tasks.forEach(task => {
-          if (
-            targetFound &&
-            !(task.id === targetTask.id) &&
-            !(task.id === aboveTask!.id) &&
-            belowTask!.pos > task.pos
-          ) {
-            task.pos = Math.ceil(task.pos + buffer * 2);
-            if (task.pos > targetTask.list.maxPos) {
-              targetTask.list.maxPos = task.pos;
-            }
-          } else {
-            targetTask.pos =
-              Math.round(
-                ((aboveTask!.pos + belowTask!.pos) / 2 + Number.EPSILON) * 1
-              ) / 1;
-          }
-        });
-        await targetTask.list.save();
-      }
-    }
-
-    publishTasks.push(...targetTask.list.tasks);
-    await targetTask.save();
-    await publish({ listId: targetTask.list.id, tasks: publishTasks });
-    return publishTasks;
+    await task.save();
+    await task.list.save();
+    await publish({ taskMoved, moreTasks });
+    return true;
   }
 
   @Mutation(() => Boolean)
@@ -341,11 +270,13 @@ export class TaskResolver {
       payload,
       args
     }: {
-      payload: PublisherPayloadArgs;
+      payload: PublishTasksArgs;
       args: { listId: string };
     }) => {
       try {
-        return payload.listId === parseInt(args.listId);
+        if (!payload.taskMoved || !payload.taskMoved.listId)
+          throw new Error('Invalid payload');
+        return payload.taskMoved.listId === args.listId;
       } catch (err) {
         console.log(err);
         return false;
@@ -353,10 +284,10 @@ export class TaskResolver {
     }
   })
   onTaskMoved(
-    @Root() payload: PublisherPayloadArgs,
+    @Root() payload: PublishTasksArgs,
     @Arg('listId', () => ID) _: string
-  ): Task[] {
-    return payload.tasks;
+  ): PublishTasksArgs {
+    return payload;
   }
 
   @Subscription(() => Task, {
