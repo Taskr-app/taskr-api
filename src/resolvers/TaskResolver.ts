@@ -13,7 +13,8 @@ import {
   Field,
   ArgsType,
   Args,
-  InputType
+  InputType,
+  ObjectType
 } from 'type-graphql';
 import { Task } from '../entity/Task';
 import { List } from '../entity/List';
@@ -31,17 +32,8 @@ const topics = {
   move: 'MOVE_TASK'
 };
 
-@ArgsType()
-class PublishTasksArgs {
-  @Field(() => TasksIdAndPosAndList)
-  taskMoved: TasksIdAndPosAndList;
-
-  @Field(() => [TaskIdAndPos])
-  moreTasks?: TaskIdAndPos[];
-}
-
 @InputType()
-class TaskIdAndPos {
+class TaskInput {
   @Field(() => ID)
   id: string;
   @Field()
@@ -49,21 +41,53 @@ class TaskIdAndPos {
 }
 
 @InputType()
-class TasksIdAndPosAndList extends TaskIdAndPos {
-  @Field(() => ID, { nullable: true })
-  listId?: string;
+class MovedTaskInput extends TaskInput {
+  @Field(() => ID)
+  listId: string;
 }
 
 @ArgsType()
 class UpdateTaskArgs {
-  @Field(() => TasksIdAndPosAndList)
-  taskMoved: TasksIdAndPosAndList;
+  @Field(() => MovedTaskInput)
+  taskMoved: MovedTaskInput;
 
-  @Field(() => [TaskIdAndPos], { nullable: true })
-  moreTasks?: TaskIdAndPos[];
+  @Field(() => [TaskInput], { nullable: true })
+  moreTasks?: TaskInput[];
+}
 
-  @Field({ nullable: true })
-  maxPos?: number;
+@ObjectType()
+class TaskWithPosResponse {
+  @Field(() => ID)
+  id: string;
+  @Field()
+  pos: number;
+}
+
+// @ObjectType()
+// class MovedTaskResponse extends TaskWithPosResponse {
+//   @Field(() => ID, { nullable: true })
+//   listId?: string;
+// }
+
+@ObjectType()
+class PublishTasksResult {
+  @Field(() => Task)
+  task: Task;
+
+  @Field(() => [TaskWithPosResponse], { nullable: true })
+  moreTasks?: TaskWithPosResponse[];
+}
+
+@ArgsType()
+class PublishTasksArgs {
+  @Field(() => Task)
+  task: Task;
+
+  @Field(() => ID)
+  sourceListId: number;
+
+  @Field(() => [TaskInput], { nullable: true })
+  moreTasks?: TaskInput[];
 }
 
 @Resolver()
@@ -129,26 +153,22 @@ export class TaskResolver {
 
   @Mutation(() => Boolean)
   @UseMiddleware(isAuth)
-  async updateTasksPos(
+  async updateTaskPos(
     @PubSub(topics.move) publish: Publisher<PublishTasksArgs>,
     @Args(() => UpdateTaskArgs)
-    { taskMoved, moreTasks, maxPos }: UpdateTaskArgs
+    { taskMoved, moreTasks }: UpdateTaskArgs
   ) {
-    let task;
     const { id, pos, listId } = taskMoved;
-    if (maxPos) {
-      task = await createQueryBuilder(Task, 'task')
-        .leftJoinAndSelect('task.list', 'list')
-        .where('"task"."id" = :id', { id })
-        .getOne();
-    } else {
-      task = await createQueryBuilder(Task, 'task')
-        .where('"task"."id" = :id', { id })
-        .getOne();
-    }
+    const task = await createQueryBuilder(Task, 'task')
+      .leftJoinAndSelect('task.list', 'list')
+      .where('"task"."id" = :id', { id })
+      .getOne();
     if (!task) throw new Error(`Task with id ${id} does not exist`);
     task.pos = pos;
-    if (listId) {
+    const sourceListId = task.list.id;
+
+    // Task is moving to another list
+    if (parseInt(listId) !== task.list.id) {
       const listToMoveTo = await createQueryBuilder(List, 'list')
         .where('"list"."id" = :listId', { listId })
         .orderBy('list.pos', 'ASC')
@@ -158,11 +178,9 @@ export class TaskResolver {
       }
       task.list = listToMoveTo;
     }
-    if (maxPos) {
-      task.list.maxPos = maxPos;
-      await task.list.save();
-    }
-    if (moreTasks) {
+
+    // Update entire list of tasks
+    if (moreTasks && moreTasks.length) {
       const queriedTasks = (task.list.tasks = await createQueryBuilder(
         Task,
         'task'
@@ -170,6 +188,7 @@ export class TaskResolver {
         .where('"task"."listId" = :id', { id: task.list.id })
         .orderBy('task.pos', 'ASC')
         .getMany());
+
       moreTasks.forEach(moreTask => {
         const taskToBeUpdated = queriedTasks.find(
           listTask => listTask.id === parseInt(moreTask.id)
@@ -179,8 +198,8 @@ export class TaskResolver {
     }
 
     await task.save();
-    await task.list.save();
-    await publish({ taskMoved, moreTasks });
+    if (task.list) await task.list.save();
+    await publish({ task, sourceListId, moreTasks });
     return true;
   }
 
@@ -264,7 +283,7 @@ export class TaskResolver {
     return updatedTask;
   }
 
-  @Subscription(() => [Task], {
+  @Subscription(() => PublishTasksResult, {
     topics: topics.move,
     filter: ({
       payload,
@@ -274,9 +293,12 @@ export class TaskResolver {
       args: { listId: string };
     }) => {
       try {
-        if (!payload.taskMoved || !payload.taskMoved.listId)
+        if (!payload.task || !payload.task.list)
           throw new Error('Invalid payload');
-        return payload.taskMoved.listId === args.listId;
+        return (
+          payload.task.list.id === parseInt(args.listId) ||
+          payload.sourceListId === parseInt(args.listId)
+        );
       } catch (err) {
         console.log(err);
         return false;
@@ -286,7 +308,7 @@ export class TaskResolver {
   onTaskMoved(
     @Root() payload: PublishTasksArgs,
     @Arg('listId', () => ID) _: string
-  ): PublishTasksArgs {
+  ): PublishTasksResult {
     return payload;
   }
 
