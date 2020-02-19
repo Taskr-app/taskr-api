@@ -1,6 +1,10 @@
 import { gql } from 'apollo-server-express';
 import faker from 'faker';
-import { testServer, createTestDbConnection, closeTestDb } from '../mocks/server';
+import {
+  testServer,
+  createTestDbConnection,
+  closeTestDb
+} from '../mocks/server';
 
 import { createTestClient } from 'apollo-server-testing';
 import { List } from '../../entity/List';
@@ -8,44 +12,54 @@ import { Connection } from 'typeorm';
 const { mutate } = createTestClient(testServer);
 
 describe('List Resolver', () => {
-  let connection: Connection
+  let connection: Connection;
   beforeAll(async () => {
     connection = await createTestDbConnection();
   });
 
   afterAll(async () => {
-    await closeTestDb(connection)
-  })
+    await closeTestDb(connection);
+  });
 
   const mockList = {
-    id: 1,
     name: faker.commerce.product(),
-    projectId: 1,
-    aboveId: 2,
-    belowId: 3
+    projectId: 1
   };
+
+  const mockLists = ['backlog', 'todo', 'doing', 'done'];
+
+  const lists: any[] = [];
 
   describe('createList mutation', () => {
     it('should create a list in the db', async () => {
-      const createList = await mutate({
-        mutation: gql`
-          mutation CreateList($name: String!, $projectId: ID!) {
-            createList(name: $name, projectId: $projectId) {
-              id
-              name
-            }
+      const createListMutationDocument = gql`
+        mutation CreateList($name: String!, $projectId: ID!) {
+          createList(name: $name, projectId: $projectId) {
+            id
+            name
           }
-        `,
-        variables: { name: mockList.name, projectId: mockList.projectId }
+        }
+      `;
+
+      mockLists.forEach(async (listName, index) => {
+        const createList = await mutate({
+          mutation: createListMutationDocument,
+          variables: {
+            name: listName,
+            projectId: 1
+          }
+        });
+        if (!createList) throw new Error('Failed to create a list');
+        lists.push(createList);
       });
 
       const list = await List.findOne({
-        where: { id: createList.data!.createList.id }
+        where: { id: lists[0].data!.createList.id }
       });
 
-      expect(parseInt(createList.data!.createList.id)).toEqual(list!.id);
-      expect(createList.data).toBeDefined();
-      expect(createList.errors).toBeUndefined();
+      expect(parseInt(lists[0].data.createList.id)).toEqual(list!.id);
+      expect(lists[0].data).toBeDefined();
+      expect(lists[0].errors).toBeUndefined();
     });
   });
 
@@ -57,7 +71,7 @@ describe('List Resolver', () => {
             updateListName(name: $name, id: $id)
           }
         `,
-        variables: { name: mockList.name, id: mockList.id }
+        variables: { name: mockList.name, id: lists[0].id }
       });
 
       expect(updateListName.data).toBeDefined();
@@ -70,13 +84,17 @@ describe('List Resolver', () => {
       const updateListPos = await mutate({
         mutation: gql`
           mutation UpdateListPos($id: ID!, $aboveId: ID!, $belowId: ID!) {
-            updateListPos(id: $id, aboveId: $aboveId, belowId: $belowId)
+            updateListPos(id: $id, aboveId: $aboveId, belowId: $belowId) {
+              id
+              name
+              pos
+            }
           }
         `,
         variables: {
-          id: mockList.id,
-          aboveId: mockList.aboveId,
-          belowId: mockList.belowId
+          id: lists[0].id,
+          aboveId: lists[1].id,
+          belowId: lists[2].id
         }
       });
 
