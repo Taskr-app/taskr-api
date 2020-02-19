@@ -41,17 +41,16 @@ describe('List Resolver', () => {
         }
       `;
 
-      mockLists.forEach(async listName => {
-        const createList = await mutate({
+      for (const listName of mockLists) {
+        const listCreate = await mutate({
           mutation: createListMutationDocument,
           variables: {
             name: listName,
             projectId: 1
           }
         });
-        if (!createList) throw new Error('Failed to create a list');
-        lists.push(createList);
-      });
+        lists.push(listCreate);
+      }
 
       const list = await List.findOne({
         where: { id: lists[0].data!.createList.id }
@@ -71,7 +70,7 @@ describe('List Resolver', () => {
             updateListName(name: $name, id: $id)
           }
         `,
-        variables: { name: mockList.name, id: lists[0].id }
+        variables: { name: mockList.name, id: lists[0].data.createList.id }
       });
 
       expect(updateListName.data).toBeDefined();
@@ -92,9 +91,9 @@ describe('List Resolver', () => {
           }
         `,
         variables: {
-          id: lists[0].id,
-          aboveId: lists[1].id,
-          belowId: lists[2].id
+          id: lists[0].data.createList.id,
+          aboveId: lists[1].data.createList.id,
+          belowId: lists[2].data.createList.id
         }
       });
 
