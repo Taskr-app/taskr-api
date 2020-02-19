@@ -41,7 +41,7 @@ describe('List Resolver', () => {
         }
       `;
 
-      mockLists.forEach(async (listName, index) => {
+      mockLists.forEach(async listName => {
         const createList = await mutate({
           mutation: createListMutationDocument,
           variables: {
